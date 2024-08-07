@@ -9,11 +9,11 @@ Build floating GUI
 Show image size, current brush size, other key metrics
 Produce generative version which liquifies random parts of the canvas upon button click
 Generative agent which move randomly and liquify as they move -- animated version
+Add brush for restore, which draws the original picture on that spot
+Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
 */
 
-var c,
-image,
-image_src,
+var image,
 MOUSE_UPDATE_DELAY = 30,
 BRUSH_SIZE,
 SMUDGE_SIZE, // SMUDGE_SIZE <= BRUSH_SIZE
@@ -37,12 +37,12 @@ var isImageLoaded = false;
 var userImage;
 var originalImg = document.getElementById('originalImg');
 
-var actualWidth;
-var actualHeight;
-var scaledWidth;
-var scaledHeight;
-var widthScalingRatio;
-var maxImageWidth = 1080; //can be tweaked
+var actualWidth = 1000; //size of default image
+var actualHeight = 600;
+var scaledWidth = 1000;
+var scaledHeight = 600;
+var widthScalingRatio = 1;
+var maxImageWidth = 2000; //can be tweaked
 
 var brushSizeInput = document.getElementById("brushSizeInput");
 brushSizeInput.addEventListener("change",getUserInputs);
@@ -101,6 +101,11 @@ var muxer;
 var mobileRecorder;
 var videofps = 30;
 
+//MAIN METHOD
+userImage = document.getElementById("originalImg");
+drawImageToCanvas();
+build();
+
 //read and accept user input image
 function readSourceImage(){
 
@@ -136,14 +141,7 @@ function readSourceImage(){
           scaledWidth = Math.floor(scaledWidth/2)*2; //video encoder doesn't accept odd numbers
           scaledHeight = Math.floor(scaledHeight/8)*8; //video encoder wants a multiple of 8
 
-          //resize the src variable of the original image
-          canvasWidth = scaledWidth;
-          canvasHeight = scaledHeight;
-          canvas.width = canvasWidth;
-          canvas.height = canvasHeight;
-          
-          //draw the resized image onto the page
-          ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
+          drawImageToCanvas();
 
           //show original image
           originalImg.src = canvas.toDataURL();
@@ -153,6 +151,7 @@ function readSourceImage(){
           console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
 
           build();
+          canvas.scrollIntoView({behavior:"smooth"});
           
       };
   };
@@ -160,6 +159,17 @@ function readSourceImage(){
   reader.readAsDataURL(file);
   isImageLoaded = true;
 
+}
+
+function drawImageToCanvas(){
+  //resize the src variable of the original image
+  canvasWidth = scaledWidth;
+  canvasHeight = scaledHeight;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  
+  //draw the resized image onto the page
+  ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
 }
 
 //  configurator / setup
@@ -342,14 +352,7 @@ canvas.ontouchend = function() {
   canvas.ontouchmove = null;
 };    
 
-// configurator
-/*
-  TODO: Replace with file input to upload images - same-origin security problem w/image data
-image_src = document.getElementById('image-src'); 
-document.getElementById('load-image').onclick = function() {
-  image.src = image_src.value;
-};
-*/
+
 document.getElementById('reset').onclick = resetCanvas;
 
 function saveImage(){
