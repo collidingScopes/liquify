@@ -11,13 +11,14 @@ Produce generative version which liquifies random parts of the canvas upon butto
 Generative agent which move randomly and liquify as they move -- animated version
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
+Better explain what smudge size does / rename? It brings more of the colour through / more hard / uses the brush size more faithfully
 */
 
 var image,
 MOUSE_UPDATE_DELAY = 30,
 BRUSH_SIZE,
 SMUDGE_SIZE, // SMUDGE_SIZE <= BRUSH_SIZE
-LIQUIFY_CONTRAST, // 0 to 1
+LIQUIFY_CONTRAST,
 timer,
 canUpdate = true,
 oldMouseX = 0,
@@ -37,10 +38,10 @@ var isImageLoaded = false;
 var userImage;
 var originalImg = document.getElementById('originalImg');
 
-var actualWidth = 1000; //size of default image
-var actualHeight = 600;
-var scaledWidth = 1000;
-var scaledHeight = 600;
+var actualWidth = 600; //size of default image
+var actualHeight = 1000;
+var scaledWidth = actualWidth;
+var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 2000; //can be tweaked
 
@@ -178,7 +179,7 @@ function build() {
   image = image || document.getElementById('originalImg');
   image.onload = resetCanvas;
 
-  BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.1);
+  BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.12);
   brushSizeInput.value = BRUSH_SIZE;
   brushSizeInput.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
   brushSizeInput.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
@@ -280,7 +281,7 @@ function liquify(x, y) {
             y_liquify = (bitmap.height-dist)/bitmap.height,
         
         // make intensity fall off exponentially
-            power = 4,
+            power = 4.5,
             skewX = (dist > SMUDGE_SIZE/2) ? -dx * Math.pow(x_liquify,power) : -dx,
             skewY = (dist > SMUDGE_SIZE/2) ? -dy * Math.pow(y_liquify,power) : -dy;
         
