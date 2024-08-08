@@ -15,6 +15,13 @@ Allow custom canvas size
 Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
 Allow user to adjust exponentially power (hard square vs. smooth circle)
 Hide "Select Image" button in the GUI when ColorGrid is chosen
+In GUI, add button to turn off the brush/mousedown effect, so that mobile users can scroll / resize
+Add button to start/stop the generative animation in the GUI
+Option to make generative agent move based on a flow field
+Allow color palettes for the Mondrian grid painting
+Allow to set default angle of the perlin noise field (and direction of draw/increment)
+Video export functionality (toggle on/off?)
+Experiment with different parameters on the flow field that might look better
 */
 
 var image,
@@ -48,26 +55,6 @@ var scaledWidth = actualWidth;
 var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 2000; //can be tweaked
-
-/*
-var backgroundTypeInput = document.getElementById("backgroundTypeInput");
-backgroundTypeInput.addEventListener("change",chooseBackground);
-var backgroundType;
-
-
-var brushSizeInput = document.getElementById("brushSizeInput");
-brushSizeInput.addEventListener("change",getUserInputs);
-
-
-var smudgeSizeInput = document.getElementById("smudgeSizeInput");
-smudgeSizeInput.addEventListener("change",getUserInputs);
-
-var strengthInput = document.getElementById("strengthInput");
-strengthInput.addEventListener("change",getUserInputs);
-
-
-document.getElementById('reset').onclick = resetCanvas;
-*/
 
 function getUserInputs(){
   BRUSH_SIZE = obj.brushSize;
@@ -106,6 +93,14 @@ function chooseBackground(){
 
       }
     }
+
+  } else if(backgroundType == "Mondrian"){
+    canvasWidth = window.innerWidth*0.95;
+    canvasHeight = window.innerHeight*0.95;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    generatePerlinData();
+    drawMondrian();
 
   } else {
     userImage = document.getElementById("originalImg");
@@ -185,9 +180,9 @@ var videofps = 30;
 
 //add gui
 var obj = {
-  StartingCanvas: 'ColorGrid',
-  brushSize: Math.min(500, window.innerWidth*0.1),
-  brushDensity: 10,
+  StartingCanvas: 'Mondrian',
+  brushSize: Math.min(500, window.innerWidth*0.15),
+  brushDensity: 5,
   opacity: 100,
 };
 var backgroundType = obj.StartingCanvas;
@@ -197,7 +192,7 @@ gui.close();
 var guiOpenToggle = false;
 
 // Choose from accepted values
-gui.add(obj, 'StartingCanvas', [ 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+gui.add(obj, 'StartingCanvas', [ 'Mondrian', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
 
 obj['SelectImage'] = function () {
   imageInput.click();
@@ -223,85 +218,8 @@ obj['SaveVideo'] = function () {
 };
 gui.add(obj, 'SaveVideo').name("Save Video (v)");
 
-
 customContainer = document.getElementById( 'gui' );
 customContainer.appendChild(gui.domElement);
-
-//MAIN METHOD
-chooseBackground();
-
-//read and accept user input image
-function readSourceImage(){
-
-  if(playAnimationToggle==true){
-      playAnimationToggle = false;
-      cancelAnimationFrame(animationRequest);
-      console.log("cancel animation");
-  } 
-      
-  //read image file      
-  var file = imageInput.files[0];
-  var reader = new FileReader();
-  reader.onload = (event) => {
-      var imageData = event.target.result;
-      userImage = new Image();
-      userImage.src = imageData;
-      userImage.onload = () => {
-        
-          actualWidth = userImage.width;
-          actualHeight = userImage.height;
-
-          //image scaling
-          if(actualWidth > maxImageWidth){
-              scaledWidth = maxImageWidth;
-              widthScalingRatio = scaledWidth / actualWidth;
-              scaledHeight = actualHeight * widthScalingRatio;
-          } else{
-              scaledWidth = actualWidth;
-              widthScalingRatio = 1;
-              scaledHeight = actualHeight;
-          }
-
-          scaledWidth = Math.floor(scaledWidth/2)*2; //video encoder doesn't accept odd numbers
-          scaledHeight = Math.floor(scaledHeight/8)*8; //video encoder wants a multiple of 8
-
-          drawImageToCanvas();
-
-          //show original image
-          originalImg.src = canvas.toDataURL();
-          originalImg.width = scaledWidth;
-          originalImg.height = scaledHeight;
-
-          console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
-
-          build();
-          canvas.scrollIntoView({behavior:"smooth"});
-          
-      };
-  };
-    
-  reader.readAsDataURL(file);
-  isImageLoaded = true;
-
-}
-
-function drawImageToCanvas(){
-  //resize the src variable of the original image
-  canvasWidth = scaledWidth;
-  canvasHeight = scaledHeight;
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
-  
-  //draw the resized image onto the page
-  ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
-}
-
-function resetCanvas() {
-  chooseBackground();
-  //canvas.height = image.offsetHeight || canvas.height;
-  //canvas.width = image.offsetWidth || canvas.width;
-  //ctx.drawImage(image, 0, 0);
-}
 
 //  brush functions
 function updateCoords(e) {
@@ -439,9 +357,6 @@ function liquify(x, y) {
   
 }
 
-
-//build();
-
 // wire events...
 
 // canvas & mouse
@@ -466,9 +381,182 @@ canvas.ontouchstart = function(e) {
 
 canvas.ontouchend = function() {
   canvas.ontouchmove = null;
-};    
+};
 
+//Generative animation
+//animation at randomized x/y points
 
+function startGenerativeDraw(){
+
+  console.log("start generative draw animation");
+
+  if(playAnimationToggle==true){
+    playAnimationToggle = false;
+    cancelAnimationFrame(animationRequest);
+    console.log("cancel animation");
+  }//cancel any existing animation loops 
+  playAnimationToggle = true;
+
+  var x;
+  var y;
+  var direction;
+
+  var movementFactor = 0.02; //should make this user controlled
+  var maxXMovement = canvasWidth*movementFactor;
+  var maxYMovement = canvasHeight*movementFactor;
+  
+  var angleBias = Math.random()-0.5;
+
+  randomizeStartPoint();
+
+  function randomizeStartPoint(){
+    x = Math.floor(Math.random()*canvasWidth);
+    y = Math.floor(Math.random()*canvasHeight);
+
+    if(Math.random()<0.5){
+      direction = -1;
+    } else {
+      direction = 1;
+    }
+  }
+
+  function loop(){
+
+    //Movement based on perlin noise
+    movementFactor = 0.08;
+
+    var movementBoost = 2;
+    var perlinGridX = Math.floor((x/canvasWidth) * numPerlinCols);
+    var perlinGridY = Math.floor((y/canvasHeight) * numPerlinRows);
+    var currentSlope = perlinDataArray[perlinGridY*numPerlinCols+perlinGridX] + angleBias;
+
+    var xMovement = maxXMovement*direction;
+    var yMovement = xMovement * currentSlope * movementBoost;
+
+    x = x+xMovement;
+    y = y+yMovement;
+
+    //randomize X/Y values if they will go off canvas
+    if(x < 0 || x > canvasWidth){
+      randomizeStartPoint();
+    }
+    if(y < 0 || y > canvasHeight){
+      randomizeStartPoint();
+    }
+
+    /*
+    //RANDOM X and Y movement
+    movementFactor = 0.1;
+    
+    if(Math.random()<0.5){
+      direction = -1;
+    } else {
+      direction = 1;
+    }
+
+    var xMovement = Math.round(Math.random() * maxXMovement - maxXMovement/2) * direction;
+    var yMovement = Math.round(Math.random() * maxYMovement - maxYMovement/2) * direction;
+
+    if(x+xMovement < 0 || x+xMovement > canvasWidth){
+      x = x - xMovement;
+    } else {
+      x = x + xMovement;
+    }
+
+    if(y+yMovement < 0 || y+yMovement > canvasHeight){
+      y = y - yMovement;
+    } else {
+      y = y + yMovement;
+    }
+    */
+
+    if(playAnimationToggle==true){
+      setTimeout(function(){
+        liquify(x,y);
+        animationRequest = requestAnimationFrame(loop);
+      },MOUSE_UPDATE_DELAY);
+    }
+
+  }
+  animationRequest = requestAnimationFrame(loop);
+}
+
+//HELPER FUNCTIONS BELOW
+
+//read and accept user input image
+function readSourceImage(){
+
+  if(playAnimationToggle==true){
+      playAnimationToggle = false;
+      cancelAnimationFrame(animationRequest);
+      console.log("cancel animation");
+  }
+      
+  //read image file      
+  var file = imageInput.files[0];
+  var reader = new FileReader();
+  reader.onload = (event) => {
+      var imageData = event.target.result;
+      userImage = new Image();
+      userImage.src = imageData;
+      userImage.onload = () => {
+        
+          actualWidth = userImage.width;
+          actualHeight = userImage.height;
+
+          //image scaling
+          if(actualWidth > maxImageWidth){
+              scaledWidth = maxImageWidth;
+              widthScalingRatio = scaledWidth / actualWidth;
+              scaledHeight = actualHeight * widthScalingRatio;
+          } else{
+              scaledWidth = actualWidth;
+              widthScalingRatio = 1;
+              scaledHeight = actualHeight;
+          }
+
+          scaledWidth = Math.floor(scaledWidth/2)*2; //video encoder doesn't accept odd numbers
+          scaledHeight = Math.floor(scaledHeight/8)*8; //video encoder wants a multiple of 8
+
+          drawImageToCanvas();
+
+          //show original image
+          originalImg.src = canvas.toDataURL();
+          originalImg.width = scaledWidth;
+          originalImg.height = scaledHeight;
+
+          console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
+
+          build();
+          canvas.scrollIntoView({behavior:"smooth"});
+          
+      };
+  };
+    
+  reader.readAsDataURL(file);
+  isImageLoaded = true;
+
+}
+
+function drawImageToCanvas(){
+  //resize the src variable of the original image
+  canvasWidth = scaledWidth;
+  canvasHeight = scaledHeight;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  
+  //draw the resized image onto the page
+  ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
+}
+
+function resetCanvas() {
+  if(playAnimationToggle==true){
+    playAnimationToggle = false;
+    cancelAnimationFrame(animationRequest);
+    console.log("cancel animation");
+  } 
+  chooseBackground();
+}
 
 function saveImage(){
   const link = document.createElement('a');
@@ -487,8 +575,6 @@ function chooseRecordingFunction(){
 function chooseEndRecordingFunction(){
 
 }
-
-//HELPER FUNCTIONS BELOW
 
 function hexToRGB(hexColor){
   
@@ -546,6 +632,151 @@ document.addEventListener('keydown', function(event) {
       chooseRecordingFunction();
   } else if (event.key === 'o') {
       toggleGUI();
-  } 
+  } else if(event.key === 'p'){
+      pausePlayAnimation();
+  }
 });
+
+// Mondrian object and functions
+
+var mondrianPalette = ["black","white","red","blue","yellow"];
+
+function randInt (min, max) {
+  return Math.floor(Math.random() * (max - min) + min)
+}
+
+class Point {
+  constructor (x, y) {
+      this.x = x
+      this.y = y
+  }
+}
+
+class Rectangle {
+  constructor (min, max) {
+      this.min = min
+      this.max = max
+  }
+
+  get width () {
+      return this.max.x - this.min.x
+  }
+
+  get height () {
+      return this.max.y - this.min.y
+  }
+
+  draw (ctx) {
+      // Draw clockwise
+      ctx.moveTo(this.min.x, this.min.y)
+      ctx.lineTo(this.max.x, this.min.y)
+      ctx.lineTo(this.max.x, this.max.y)
+      ctx.lineTo(this.min.x, this.max.y)
+      ctx.lineTo(this.min.x, this.min.y)
+  }
+
+  split (xPad, yPad, depth, limit, ctx) {
+      ctx.fillStyle = mondrianPalette[randInt(0, mondrianPalette.length)]
+      ctx.fillRect(this.min.x, this.min.y, this.max.x, this.max.y)
+      this.draw(ctx)
+
+      // Check the level of recursion
+      if (depth === limit) {
+      return
+      }
+
+      // Check the rectangle is enough large and tall
+      if (this.width < 2 * xPad || this.height < 2 * yPad) {
+      return
+      }
+
+      // If the rectangle is wider than it's height do a left/right split
+      var r1 = new Rectangle()
+      var r2 = new Rectangle()
+      if (this.width > this.height) {
+      var x = randInt(this.min.x + xPad, this.max.x - xPad)
+      r1 = new Rectangle(this.min, new Point(x, this.max.y))
+      r2 = new Rectangle(new Point(x, this.min.y), this.max)
+      // Else do a top/bottom split
+      } else {
+      var y = randInt(this.min.y + yPad, this.max.y - yPad)
+      r1 = new Rectangle(this.min, new Point(this.max.x, y))
+      r2 = new Rectangle(new Point(this.min.x, y), this.max)
+      }
+
+      // Split the sub-rectangles
+      r1.split(xPad, yPad, depth + 1, limit, ctx)
+      r2.split(xPad, yPad, depth + 1, limit, ctx)
+  }
+}
+
+function drawMondrian(){
+  //draw Mondrian grid
+  ctx.beginPath();
+  ctx.lineWidth = 5;
+
+  var xPad = Math.floor(canvasWidth * 0.05);
+  var yPad = Math.floor(canvasHeight * 0.05);
+
+  var initialRect = new Rectangle(new Point(0, 0), new Point(canvasWidth, canvasHeight));
+  initialRect.split(xPad, yPad, 0, 8, ctx);
+
+  ctx.stroke();
+}
+
+function pausePlayAnimation(){
+  console.log("pause/play animation");
+  if(playAnimationToggle==true){
+      playAnimationToggle = false;
+      cancelAnimationFrame(animationRequest);
+      console.log("cancel animation");
+  } else {
+      startGenerativeDraw();
+  }
+}
+
+//Perlin noise functions
+//SOURCE: https://github.com/joeiddon/perlin
+
+var perlinDataArray;
+const GRID_SIZE = 4;
+const RESOLUTION = 128;
+const COLOR_SCALE = 250;
+var numPerlinRows = GRID_SIZE*RESOLUTION;
+var numPerlinCols = GRID_SIZE*RESOLUTION;
+
+function generatePerlinData(){
+  
+  perlin.seed(); //reset perlin data
+  perlinDataArray = [];
+
+  let pixel_size = canvasWidth / RESOLUTION;
+  let num_pixels = GRID_SIZE / RESOLUTION;
+  
+  for (let y = 0; y < GRID_SIZE; y += num_pixels / GRID_SIZE){
+      for (let x = 0; x < GRID_SIZE; x += num_pixels / GRID_SIZE){
+          let currentPerlinValue = perlin.get(x, y);
+          perlinDataArray.push(currentPerlinValue);
+
+          /*
+          //draw heatmap onto the canvas using perlin data
+          let v = parseInt(currentPerlinValue * COLOR_SCALE);
+          ctx.fillStyle = 'hsl('+v+',50%,50%)';
+          ctx.fillRect(
+              x / GRID_SIZE * canvasWidth,
+              y / GRID_SIZE * canvasWidth,
+              pixel_size,
+              pixel_size
+          );
+          */
+      }
+  }
+
+  console.log(perlinDataArray);
+}
+
+
+//MAIN METHOD
+chooseBackground();
+//setTimeout(startGenerativeDraw,2000);
 
