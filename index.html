@@ -1,96 +1,290 @@
+<!--
+To dos:
+--Basic Functionality--
+Mobile formatting -- below a certain screen width, have the two images above/below rather than side-by-side
+Write short bio for each template at the bottom, to help users understand what's happening with the input-output?
+Add a tip at the bottom, dynamically depending on the visual style chosen (randomize, click on the image, drag slider, etc...)
+
+--New Visual Ideas--
+For palletize, add a palette which works well with skin tones (skin colors + colors that are very different for the background?)
+Soft focus / gaussian blur / halo effect
+Kandinsky abstract art (overlay objects on top of photo? Something else?)
+Abstract art (check May 30 error version)
+-->
+
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" type="text/css" href="style.css">
-  <script type="text/javascript" src="dat.gui-master/build/dat.gui.min.js"></script>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Image Mage</title>
+    
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="icon" href="images/imageMageLogo.png">
+    <link rel="apple-touch-icon" href="images/imageMageLogo.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-  <!-- Google fonts
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
-   -->
+    <meta property="og:title" content="Image Mage" />
+    <meta property="og:description" content="Turn photos into comic book art, abstract paintings, pixel art, and more." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://imagemageage.github.io/" />
+    <meta property="og:image" content="https://imagemageage.github.io/images/siteOGImage2.png">
+    <meta property="og:image:type" content="image/png" >
+    <meta property="og:image:width" content="800" >
+    <meta property="og:image:height" content="798" >
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
 
-  <!--
-  <meta property="og:title" content="Hiroshi Nagai - animated painting" />
-  <meta property="og:description" content="Create your own animated painting" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://collidingscopes.github.io/nagai/" />
-  <meta property="og:image" content="https://collidingscopes.github.io/nagai/images/Shikoku.png">
-  <meta property="og:image:type" content="image/png" >
-  <meta property="og:image:width" content="866" >
-  <meta property="og:image:height" content="825" >
-
-
-  <link rel="icon" href="images/siteFavicon3.png">
-  <link rel="apple-touch-icon" href="images/siteFavicon3.png">
-    -->
-  
+    <script src='https://joeiddon.github.io/perlin/perlin.js'></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
+
 <body>
-<!--
-Choose an image URL:
-<input id="image-src" type="text" value="http://"><button id="load-image">Load image</button>
--->
+
+<div id="coverScreen" class="hidden">
+</div>
+
+<div class="popup">
+    <p>Try clicking on the source image (left-side)</p>
+    <i id="closeIcon" class="fa-solid fa-circle-xmark"></i>
+</div>
+
+<div id="introDiv">
+    <table id="siteHeaderTable">
+        <tr>
+            <td id="siteNameText">IMAGE MAGE</td>
+            <td><img id="siteLogo" src="images/imageMageLogo2.png"></td>
+        </tr>
+    </table>
+
+    <div id="headerCarousel" class="carousel">
+        <div class="carousel-inner">
+          <div class="carousel-item active">
+            <img class="carouselImage" src="images/headerAnimation2.gif" alt="Photo 1">
+          </div>
+          <div class="carousel-item">
+            <img class="carouselImage" src="images/siteOGImage2.png" alt="Photo 2">
+          </div>
+          <div class="carousel-item">
+            <img class="carouselImage" src="images/KowloonPurple.png" alt="Photo 3">
+          </div>
+          <div class="carousel-item">
+            <img class="carouselImage" src="images/KKSunsetDuo.png" alt="Photo 4">
+          </div>
+
+        </div>
+        <div class="carousel-dots">
+          <button class="carousel-dot active" data-slide="0"></button>
+          <button class="carousel-dot" data-slide="1"></button>
+          <button class="carousel-dot" data-slide="2"></button>
+          <button class="carousel-dot" data-slide="3"></button>
+        </div>
+    </div>
+
+    <p>Remix and rediscover your photos. Turn photos into comic book art, abstract paintings, pixel art, and more.</p>
+
+</div>
 
 <div id="toolDiv">
-  <div id="gui"></div>
 
-  <!--
-  <select id="backgroundTypeInput" class="select-style userInput">
-    <option value="colorGrid" selected="selected">Color Grid</option>
-    <option value="image">Image</option>
-  </select>
+    <div id="inputTableDiv">
 
+        <table id="inputTable">
+            <tr>
+                <th class="inputCol1">Style</th>
+                <th class="inputCol2">RGBA Shift</th>
+                <th class="inputCol3">Smear</th>
+                <th class="inputCol4">Sensitivity</th>
+                <th class="inputCol5">Color Range</th>
+                <th class="inputCol6">Max Dot Size</th>
+                <th class="inputCol7">Palette</th>
+                <th class="inputCol8">Colors</th>
+                <th class="inputCol9">Background</th>
+                <th class="inputCol10">Colors</th>
+                <th class="inputCol11">Lightness</th>
+                <th class="inputCol12">Saturation</th>
+            </tr>
 
-  <button id="reset">Clear canvas</button>
-  <pre><span class="tableText">Brush Size</span><br><input class="input-number-noSpinners" type="range" id="brushSizeInput" value="50" min="5" max="500"></pre>
-  <pre><span class="tableText">Smudge Size</span><br><input class="input-number-noSpinners" type="range" id="smudgeSizeInput" value="50" min="5" max="500"></pre>
-  <pre><span class="tableText">Strength</span><br><input class="input-number-noSpinners" type="range" id="strengthInput" value="100" min="5" max="100"></pre>
+            <tr>
+                <td class="inputCol1">
+                    <select id="visualizationChoice" class="select-style userInput">
+                        <option value="pointillist" selected="selected">Pointillist</option>
+                        <option value="palletize">Palletize</option>
+                        <option value="rings">Rings</option>
+                        <option value="gumball">Gumball</option>
+                        <option value="braille">Braille</option>
+                        <option value="dust">Dust</option>
+                        <option value="outlines">Outlines</option>
+                        <option value="frontier">Frontier</option>
+                        <option value="void">Void</option>
+                        <option value="sketch">Sketch</option>
+                        <option value="roller">Roller</option>
+                        <option value="clippings">Clippings</option>
+                        <option value="mondrian">Mondrian</option>
+                        <option value="noisySort">Noisy Sort</option>
+                        <option value="eclipse">Eclipse</option>
+                        <option value="satLight">Sat-Light</option>
+                        <option value="edgy">Edgy</option>
+                        <option value="shadow">Shadow</option>
+                    </select>
 
+                    <!--
+                        WORK IN PROGRESS VISUALS
+                        <option value="grid">Grid</option>
+                        <option value="rgba">RGBA shift</option>
+                        <option value="smear">Smear</option>
+                        <option value="noise">Noise</option>
+                        <option value="perlin">Perlin</option>
+                        <option value="pixel">Pixel Art</option>
+                        <option value="perlin2">Perlin2</option>
+                        <option value="perlin3">Perlin3</option>
+                        <option value="pixelPop">Pixel Pop</option>
+                    -->
+                </td>
 
-  <pre><span class="tableText">Color Range</span><br><input class="input-number-noSpinners" type="range" id="colorRangeInput" value="100" min="0" max="255"></pre>
-  <pre><span class="tableText">Grayscale Strength</span><br><input class="input-number-noSpinners" type="range" id="grayProbabilityInput" value="25" min="0" max="100"></pre>
-  <pre><span class="tableText">Gradient Color1</span><br><input type="color" id="gradientColor1Input" value="#E1D6FF"/></pre>
-  <pre><span class="tableText">Gradient Color2</span><br><input type="color" id="gradientColor2Input" value="#75B88C"/></pre>
-  <pre><span class="tableText">Grad. Color Range</span><br><input class="input-number-noSpinners" type="range" id="gradientColorRangeInput" value="50" min="0" max="255"></pre>
-  <pre><span class="tableText">Grad. Opacity</span><br><input class="input-number-noSpinners" type="range" id="gradientOpacityInput" value="3" min="1" max="3"></pre>
-  <pre><span class="tableText">Grad. Pixel Size</span><br><input class="input-number-noSpinners" type="range" id="gradientPixelSizeInput" value="5" min="1" max="50"></pre>
-  <pre><span class="tableText">Animation Loops</span><br><input class="input-number-noSpinners" type="range" id="animationLoopsInput" value="3" min="1" max="10"></pre>
+                <td class="inputCol2">
+                    <label for="red">Red:</label>
+                    <input class="input-number-noSpinners" type="range" id="red" value="95" min="0" max="500">
+                    <label for="green">Green:</label>
+                    <input class="input-number-noSpinners" type="range" id="green" value="125" min="0" max="500">
+                    <label for="blue">Blue:</label>
+                    <input class="input-number-noSpinners" type="range" id="blue" value="110" min="0" max="500">
+                    <label for="alpha">Alpha:</label>
+                    <input class="input-number-noSpinners" type="range" id="alpha" value="100" min="0" max="500">
+                </td>
+                
+                <td class="inputCol3">
+                    <label for="smearWidth">Width:</label>
+                    <input class="input-number-noSpinners" type="range" id="smearWidth" value="100" min="0" max="100">
+                    <label for="chosenPixel">Chosen Pixel:</label>
+                    <input class="input-number-noSpinners" type="range" id="chosenPixel" value="99" min="0" max="100">
+                </td>
+
+                <td class="inputCol4">
+                    <input class="input-number-noSpinners" type="range" id="noiseProbability" value="45" min="0" max="100">
+                </td>
+
+                <td class="inputCol5">
+                    <input class="input-number-noSpinners" type="range" id="noiseColorRange" value="35" min="0" max="100">
+                </td>
+
+                <td class="inputCol6">
+                    <input class="input-number-noSpinners" type="range" id="dotSizeFactor" value="50" min="0" max="100">
+                </td>
+
+                <td class="inputCol7">
+                    <select id="paletteChoice" class="select-style userInput">
+
+                    </select>
+                </td>
+
+                <td class="inputCol8">
+                    <input type="color" class="colorInput" id="color-picker" value="#0066A4">
+                    <input type="color" class="colorInput" id="color-picker2" value="#640000">
+                    <input type="color" class="colorInput" id="color-picker3" value="#006400">
+                    <input type="color" class="colorInput" id="color-picker4" value="#FFC300">
+                    <input type="color" class="colorInput" id="color-picker5" value="#FFFFFF">
+                    <input type="color" class="colorInput" id="color-picker6" value="#000000">
+                </td>
+
+                <td class="inputCol9">
+                    <input type="color" class="colorInput" id="backgroundColorInput" value="#FFF9EB">
+                </td>
+
+                <td class="inputCol10">
+                    <input type="color" class="colorInput" id="dualColorInput1" value="#8AB6A9">
+                    <input type="color" class="colorInput" id="dualColorInput2" value="#EA3630">
+                </td>
+
+                <td class="inputCol11">
+                    <input class="input-number-noSpinners" type="range" id="lightnessLevel" value="20" min="0" max="100">
+                </td>
+
+                <td class="inputCol12">
+                    <input class="input-number-noSpinners" type="range" id="saturationLevel" value="45" min="0" max="100">
+                </td>
+            </tr>
+
+        </table>
+
+    </div>
+
+    <div id="buttonTableDiv">
+        <table id="buttonTable">
+            <tr>
+                <td>
+                    <label for="imageInput" class="custom-file-upload">
+                        <i class="fa fa-cloud-upload"></i> Select image
+                    </label>
+                    <input type="file" id="imageInput" accept="image/*">
+                </td>
+
+                <td>
+                    <button id="generate-button">Re-generate image (r)</button>
+                </td>
+
+                <td>
+                    <button id="save-image-button">Save image (s)</button>
+                </td>
+            </tr>
+        </table>
+    </div>
   
-  <button id="saveImageButton">Export Image</button>
-  <button id="recordVideoButton">Export Video</button>
-  
-  -->
-  
-  <canvas id="canvas"></canvas>
+    <table id="imageTable" style="text-align: left">
+        <tr>
+            <td class="imageHeaderText">Source Image</td>
+            <td class="imageHeaderText">New Image</td>
+        </tr>
 
-  <label for="imageInput" class="custom-file-upload hidden">
-    <i class="fa fa-cloud-upload hidden"></i> Select image
-  </label>
-  <input type="file" id="imageInput" accept="image/*" class="hidden">
+        <tr>
+            <td class="imageTableCell"><div id="imageContainer"></div></td>
+            <td class="imageTableCell"><div id="newImageContainer"></div></td>
+        </tr>
 
-  <img id="originalImg" class="hidden" src="images/AnaBenet.jpg">
-
-  <div id="videoRecordingMessageDiv" class="hidden sticky-bottom">
-      Video recording underway. The video will be saved to your downloads folder once the animation finishes.<br><br>This feature can be a bit buggy on Mobile -- if it doesn't work, please try on Desktop.
-  </div>
+    </table>
 
 </div>
 
-<!--
-<div class="output">
-  <canvas id="canvas" width="500" height="335" class="placeholder">Canvas!</canvas>
-  <img id="image" class="placeholder" src="legos.png" />
-  
+<div id="notesDiv">
+    <div id="textBox">
+
+        <h2 id="aboutText">ABOUT</h2>
+
+        <p>This web tool is completely free, open source, without any paywalls or premium options. You are welcome to use it for personal or commercial purposes.</p>
+        <p>If you found this tool useful, feel free to buy me a coffee. This would be much appreciated during late-night coding sessions!</p>
+        
+        <a href="https://www.buymeacoffee.com/stereoDrift" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png" alt="Buy Me A Coffee"></a>
+
+        <p>A few tips for using this tool:</p>
+        <ul>
+            <li>Press <b>"r"</b> to re-generate a new image. Some visual styles (such as Roller and Pointilist) have randomness built-in, so this gives you a fresh image</li>
+            <li>Press <b>"s"</b> to save an image</li>
+            <li>You can generate some neat effects by "stacking" the visual styles. Try running "Palletize" on your source image, saving the output, then loading that image as a source file. After, run the "Pointillist visual. This combines two manipulation effects into one image</li>
+            <li>The gif at the top of the page was created by taking 10 different variations of a photo using higher/lower sensitivity values (the r / s hotkeys make this pretty speedy to do!)</li>
+            <li>The GIF animation was then created using the Gif Maker tool provided by <a href="https://ezgif.com/maker" rel="noopener" target="_blank">Ezgif</a></li>
+        </ul>
+        <p>This project is coded using Javascript, HTML, and CSS (see github repo linked below). I do not have access to any of the images that you upload here, as all processing is done "client-side" (i.e., <b>no images are saved or stored by me — they stay on your computer only</b>).</p>
+        <p>I'm working on some new visual styles which I hope to add soon. Let me know if you have ideas 💡</p>
+        <p>Feel free to reach out to discuss, ask questions, or to share your creations! You can find my instagram and email accounts through the buttons below.</p>
+    </div>
 </div>
--->
+
+<div id="linksDiv">
+    <table id="infoMenuTable">
+        <tr>
+            <td><button id="gitHubButton"class="socialMediaButton"><a href="https://github.com/imageMageAge/imageMageAge.github.io" target="blank" rel="noopener"><i class="fa-brands fa-github"></i></a></button></td>
+            <td><button id="coffeeButton" class="socialMediaButton"><a href="https://www.buymeacoffee.com/stereoDrift" target="blank" rel="noopener"><i class="fa-solid fa-heart"></i></a></button></td>
+            <td><button id="instagramButton" class="socialMediaButton"><a href="https://www.instagram.com/stereo.drift/" target="blank" rel="noopener"><i class="fa-brands fa-instagram"></i></a></button></td>
+            <td><button id="emailButton" class="socialMediaButton"><a href="mailto:stereodriftvisuals@gmail.com" target="blank" rel="noopener"><i class="fa-solid fa-envelope"></i></a></button></td>
+        </tr>
+    </table>
+</div>
+
+<script src="imageMage.js"></script>
 
 </body>
-
-<script src="liquify.js"></script>
-
 </html>
