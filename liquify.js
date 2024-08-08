@@ -1,21 +1,20 @@
 /*
 To do list:
 dynamic cursor size based on brush size
-Allow smudge to go right to the edge of the image
-Format user menu and add other inputs
 Can the brush also mix in other colors? i.e., a default color bias
-Build floating GUI
 Show image size, current brush size, other key metrics
 Produce generative version which liquifies random parts of the canvas upon button click
-Generative agent which move randomly and liquify as they move -- animated version
+- Generative agent which move randomly and liquify as they move -- animated version
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
-Better explain what smudge size does / rename? It brings more of the colour through / more hard / uses the brush size more faithfully
 On mobile, screen can become unscrollable (can't save or change options)
 On mobile, screen touch position can become unsynced from the canvas
 For generative background:
-Better color choices -- based on HSL scale instead?
+Better color choices -- based on HSL scale instead? Start with palette then allow random
 Allow custom canvas size
+Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
+Allow user to adjust exponentially power (hard square vs. smooth circle)
+Hide "Select Image" button in the GUI when ColorGrid is chosen
 */
 
 var image,
@@ -36,6 +35,7 @@ var canvasHeight;
 var animationRequest;
 var playAnimationToggle = false;
 
+//image input variables
 var imageInput = document.getElementById('imageInput');
 imageInput.addEventListener('change', readSourceImage);
 var isImageLoaded = false;
@@ -49,12 +49,15 @@ var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 2000; //can be tweaked
 
+/*
 var backgroundTypeInput = document.getElementById("backgroundTypeInput");
 backgroundTypeInput.addEventListener("change",chooseBackground);
 var backgroundType;
 
+
 var brushSizeInput = document.getElementById("brushSizeInput");
 brushSizeInput.addEventListener("change",getUserInputs);
+
 
 var smudgeSizeInput = document.getElementById("smudgeSizeInput");
 smudgeSizeInput.addEventListener("change",getUserInputs);
@@ -62,20 +65,24 @@ smudgeSizeInput.addEventListener("change",getUserInputs);
 var strengthInput = document.getElementById("strengthInput");
 strengthInput.addEventListener("change",getUserInputs);
 
+
+document.getElementById('reset').onclick = resetCanvas;
+*/
+
 function getUserInputs(){
-  BRUSH_SIZE = Number(brushSizeInput.value);
-  SMUDGE_SIZE = Number(smudgeSizeInput.value);
-  LIQUIFY_CONTRAST = Number(strengthInput.value/100);
+  BRUSH_SIZE = obj.brushSize;
+  SMUDGE_SIZE = obj.brushDensity/100 * BRUSH_SIZE;
+  LIQUIFY_CONTRAST = obj.opacity/100;
   console.log("Brush size: "+BRUSH_SIZE);
   console.log("Smudge size: "+SMUDGE_SIZE);
-  console.log("Strength: "+LIQUIFY_CONTRAST);
+  console.log("Opacity: "+LIQUIFY_CONTRAST);
 }
 
 function chooseBackground(){
-  backgroundType = String(backgroundTypeInput.value);
+  backgroundType = obj.StartingCanvas;
   console.log("background type: "+backgroundType);
 
-  if(backgroundType == "colorGrid"){
+  if(backgroundType == "ColorGrid"){
     canvasWidth = window.innerWidth*0.95;
     canvasHeight = window.innerHeight*0.95;
     canvas.width = canvasWidth;
@@ -113,20 +120,21 @@ function chooseBackground(){
 function build() {
   canvas = canvas || document.getElementById('canvas');
   
-  if(backgroundType == "image"){
+  if(backgroundType == "Image"){
     image = image || document.getElementById('originalImg');
     image.onload = resetCanvas;
   }
 
+  /*
+  Reset default brush settings
   BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.12);
-  brushSizeInput.value = BRUSH_SIZE;
-  brushSizeInput.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
-  brushSizeInput.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
+  obj.brushSize = BRUSH_SIZE;
+  obj.brushSize.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
+  obj.brushSize.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
 
+  obj.brushDensity = 8;
   SMUDGE_SIZE = Math.round(BRUSH_SIZE*0.08);
-  smudgeSizeInput.value = SMUDGE_SIZE;
-  smudgeSizeInput.min = Math.floor(BRUSH_SIZE*0.02);
-  smudgeSizeInput.max = Math.ceil(BRUSH_SIZE*0.2);
+  */
 
   getUserInputs();
 }
@@ -152,15 +160,20 @@ if(ua.includes("Android")){
 console.log("isSafari: "+isSafari+", isFirefox: "+isFirefox+", isIOS: "+isIOS+", isAndroid: "+isAndroid);
 
 //save image button
+/*
 var saveImageButton = document.getElementById("saveImageButton");
 saveImageButton.addEventListener('click', saveImage);
+*/
 
 //video recording function
+/*
 var recordBtn = document.getElementById("recordVideoButton");
+recordBtn.addEventListener('click', chooseRecordingFunction);
+*/
+
 var recording = false;
 var mediaRecorder;
 var recordedChunks;
-recordBtn.addEventListener('click', chooseRecordingFunction);
 var finishedBlob;
 var recordingMessageDiv = document.getElementById("videoRecordingMessageDiv");
 var recordVideoState = false;
@@ -169,6 +182,50 @@ var videoEncoder;
 var muxer;
 var mobileRecorder;
 var videofps = 30;
+
+//add gui
+var obj = {
+  StartingCanvas: 'ColorGrid',
+  brushSize: Math.min(500, window.innerWidth*0.1),
+  brushDensity: 10,
+  opacity: 100,
+};
+var backgroundType = obj.StartingCanvas;
+
+var gui = new dat.gui.GUI( { autoPlace: false } );
+gui.close();
+var guiOpenToggle = false;
+
+// Choose from accepted values
+gui.add(obj, 'StartingCanvas', [ 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+
+obj['SelectImage'] = function () {
+  imageInput.click();
+};
+gui.add(obj, 'SelectImage').name('Select Image');
+
+gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
+gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
+gui.add(obj, "opacity").min(5).max(100).step(1).name('Opacity').listen().onChange(getUserInputs);
+
+obj['RefreshCanvas'] = function () {
+  resetCanvas();
+};
+gui.add(obj, 'RefreshCanvas').name("Refresh Canvas (r)");
+
+obj['SaveImage'] = function () {
+saveImage();
+};
+gui.add(obj, 'SaveImage').name("Save Image (i)");
+
+obj['SaveVideo'] = function () {
+  chooseRecordingFunction();
+};
+gui.add(obj, 'SaveVideo').name("Save Video (v)");
+
+
+customContainer = document.getElementById( 'gui' );
+customContainer.appendChild(gui.domElement);
 
 //MAIN METHOD
 chooseBackground();
@@ -240,9 +297,9 @@ function drawImageToCanvas(){
 }
 
 function resetCanvas() {
+  chooseBackground();
   //canvas.height = image.offsetHeight || canvas.height;
   //canvas.width = image.offsetWidth || canvas.width;
-  chooseBackground()
   //ctx.drawImage(image, 0, 0);
 }
 
@@ -263,7 +320,6 @@ function updateCoords(e) {
         cx = parseInt(coord_x - box.left),
         cy = parseInt(coord_y - box.top);
   
-    
     // make sure we are within bounding box
     if (e.target.id == 'canvas') {
       liquify(cx, cy); 
@@ -292,20 +348,32 @@ function liquify(x, y) {
   oldMouseX = x;
   oldMouseY = y;
   
+
+  //IF FUNCTION WAS MOVED BEFORE BUILDING BRUSH BOX AND MODIFIED
+  // check bounding with a defined brush dimension
+  if (x < 0 ||
+      y < 0 ||
+      (x) > canvas.width ||
+      (y) > canvas.height) {
+        return;
+      }
+  
   // build brush box around mouse pointer
   x = x - parseInt(BRUSH_SIZE/2);
   y = y - parseInt(BRUSH_SIZE/2);
 
+  /*
+  ORIGINAL BOUNDING EXIT FUNCTION
   // check bounding with a defined brush dimension
   if (x < 0 ||
-      y < 0 ||
-      (x + BRUSH_SIZE) >= canvas.width ||
-      (y + BRUSH_SIZE) >= canvas.height) {
-        return;
-      }
+    y < 0 ||
+    (x + BRUSH_SIZE) >= canvas.width ||
+    (y + BRUSH_SIZE) >= canvas.height) {
+      return;
+    }
+  */
   
   var bitmap = ctx.getImageData(x, y, BRUSH_SIZE, BRUSH_SIZE);
-  
   // note - each pixel is 4 bytes in byte array bitmap.data
   
   // bound dx, dy within brush size
@@ -329,7 +397,7 @@ function liquify(x, y) {
             y_liquify = (bitmap.height-dist)/bitmap.height,
         
         // make intensity fall off exponentially
-            power = 4.5,
+            power = 6,
             skewX = (dist > SMUDGE_SIZE/2) ? -dx * Math.pow(x_liquify,power) : -dx,
             skewY = (dist > SMUDGE_SIZE/2) ? -dy * Math.pow(y_liquify,power) : -dy;
         
@@ -346,7 +414,6 @@ function liquify(x, y) {
         
         // origin bitmap index on bitmap
         var o_bit = ~~fromX * 4 +  ~~fromY * bitmap.width * 4;
-        
         
         // exact copy equation - o_bit to bit:
         //o_bit = col *  4 +  row * bitmap.width * 4;
@@ -402,7 +469,6 @@ canvas.ontouchend = function() {
 };    
 
 
-document.getElementById('reset').onclick = resetCanvas;
 
 function saveImage(){
   const link = document.createElement('a');
@@ -459,4 +525,27 @@ function tweakHexColor(hexColor, range){
   var newHexColor = rgbToHex(newRGBArray[0],newRGBArray[1],newRGBArray[2]);
   return newHexColor;
 }
+
+function toggleGUI(){
+  if(guiOpenToggle == false){
+      gui.open();
+      guiOpenToggle = true;
+  } else {
+      gui.close();
+      guiOpenToggle = false;
+  }
+}
+
+//shortcut hotkey presses
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'r') {
+      resetCanvas();
+  } else if (event.key === 'i') {
+      saveImage();
+  } else if (event.key === 'v') {
+      chooseRecordingFunction();
+  } else if (event.key === 'o') {
+      toggleGUI();
+  } 
+});
 

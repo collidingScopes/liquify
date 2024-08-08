@@ -16,7 +16,7 @@ html, body{
 }
 
 .closed{
-    height: 15px;
+    height: 0px;
 }
 
 #introDiv{
@@ -105,7 +105,8 @@ h2 {
 
 #canvas {
     display: block;
-    margin: 0;
+    margin: 0 auto;
+    margin-top: 2.5vh;
     padding: 0;
     border: 3px solid black;
 
@@ -156,7 +157,7 @@ input:hover{
 }
 
 .select-style {
-    border-bottom: 2px solid rgb(0, 183, 255);
+    border-bottom: 2px solid #00b7ff;
     border-left:none;
     border-top:none;
     border-right:none;
@@ -184,7 +185,7 @@ input:hover{
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 
