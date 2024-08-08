@@ -4,7 +4,6 @@ dynamic cursor size based on brush size
 Allow smudge to go right to the edge of the image
 Format user menu and add other inputs
 Can the brush also mix in other colors? i.e., a default color bias
-Add default image (colorful ballons? colorful origami?)
 Build floating GUI
 Show image size, current brush size, other key metrics
 Produce generative version which liquifies random parts of the canvas upon button click
@@ -12,6 +11,11 @@ Generative agent which move randomly and liquify as they move -- animated versio
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
 Better explain what smudge size does / rename? It brings more of the colour through / more hard / uses the brush size more faithfully
+On mobile, screen can become unscrollable (can't save or change options)
+On mobile, screen touch position can become unsynced from the canvas
+For generative background:
+Better color choices -- based on HSL scale instead?
+Allow custom canvas size
 */
 
 var image,
@@ -45,6 +49,10 @@ var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 2000; //can be tweaked
 
+var backgroundTypeInput = document.getElementById("backgroundTypeInput");
+backgroundTypeInput.addEventListener("change",chooseBackground);
+var backgroundType;
+
 var brushSizeInput = document.getElementById("brushSizeInput");
 brushSizeInput.addEventListener("change",getUserInputs);
 
@@ -61,6 +69,66 @@ function getUserInputs(){
   console.log("Brush size: "+BRUSH_SIZE);
   console.log("Smudge size: "+SMUDGE_SIZE);
   console.log("Strength: "+LIQUIFY_CONTRAST);
+}
+
+function chooseBackground(){
+  backgroundType = String(backgroundTypeInput.value);
+  console.log("background type: "+backgroundType);
+
+  if(backgroundType == "colorGrid"){
+    canvasWidth = window.innerWidth*0.95;
+    canvasHeight = window.innerHeight*0.95;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    var rows = 8;
+    var cols = 8;
+    var cellHeight = Math.ceil(canvasHeight / rows);
+    var cellWidth = Math.ceil(canvasWidth / cols);
+    var baseColor = rgbToHex(Math.round(Math.random()*255),Math.round(Math.random()*255),Math.round(Math.random()*255));
+    var backgroundColorRange = 150;
+
+    //draw grid of colors
+    for(var i=0; i<rows; i++){
+      for(var j=0; j<cols; j++){
+        var x = j*cellWidth;
+        var y = i*cellHeight;
+
+        ctx.fillStyle = tweakHexColor(baseColor,backgroundColorRange);
+        ctx.fillRect(x,y,cellWidth,cellHeight)
+
+      }
+    }
+
+  } else {
+    userImage = document.getElementById("originalImg");
+    drawImageToCanvas();
+  }
+
+  build();
+
+}
+
+//  configurator / setup
+function build() {
+  canvas = canvas || document.getElementById('canvas');
+  
+  if(backgroundType == "image"){
+    image = image || document.getElementById('originalImg');
+    image.onload = resetCanvas;
+  }
+
+  BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.12);
+  brushSizeInput.value = BRUSH_SIZE;
+  brushSizeInput.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
+  brushSizeInput.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
+
+  SMUDGE_SIZE = Math.round(BRUSH_SIZE*0.08);
+  smudgeSizeInput.value = SMUDGE_SIZE;
+  smudgeSizeInput.min = Math.floor(BRUSH_SIZE*0.02);
+  smudgeSizeInput.max = Math.ceil(BRUSH_SIZE*0.2);
+
+  getUserInputs();
 }
 
 //detect user browser
@@ -103,9 +171,7 @@ var mobileRecorder;
 var videofps = 30;
 
 //MAIN METHOD
-userImage = document.getElementById("originalImg");
-drawImageToCanvas();
-build();
+chooseBackground();
 
 //read and accept user input image
 function readSourceImage(){
@@ -173,29 +239,11 @@ function drawImageToCanvas(){
   ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
 }
 
-//  configurator / setup
-function build() {
-  canvas = canvas || document.getElementById('canvas');
-  image = image || document.getElementById('originalImg');
-  image.onload = resetCanvas;
-
-  BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.12);
-  brushSizeInput.value = BRUSH_SIZE;
-  brushSizeInput.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
-  brushSizeInput.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
-
-  SMUDGE_SIZE = Math.round(BRUSH_SIZE*0.08);
-  smudgeSizeInput.value = SMUDGE_SIZE;
-  smudgeSizeInput.min = Math.floor(BRUSH_SIZE*0.02);
-  smudgeSizeInput.max = Math.ceil(BRUSH_SIZE*0.2);
-
-  getUserInputs();
-}
-
 function resetCanvas() {
-  canvas.height = image.offsetHeight || canvas.height;
-  canvas.width = image.offsetWidth || canvas.width;
-  ctx.drawImage(image, 0, 0);
+  //canvas.height = image.offsetHeight || canvas.height;
+  //canvas.width = image.offsetWidth || canvas.width;
+  chooseBackground()
+  //ctx.drawImage(image, 0, 0);
 }
 
 //  brush functions
@@ -372,5 +420,43 @@ function chooseRecordingFunction(){
 
 function chooseEndRecordingFunction(){
 
+}
+
+//HELPER FUNCTIONS BELOW
+
+function hexToRGB(hexColor){
+  
+  var rgbArray = []
+
+  const r = parseInt(hexColor.substring(1, 3), 16);
+  const g = parseInt(hexColor.substring(3, 5), 16);
+  const b = parseInt(hexColor.substring(5, 7), 16);
+  
+  rgbArray.push(r);
+  rgbArray.push(g);
+  rgbArray.push(b);
+
+  return rgbArray;
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + (
+    (r.toString(16).padStart(2, "0")) +
+    (g.toString(16).padStart(2, "0")) +
+    (b.toString(16).padStart(2, "0"))
+  );
+}
+
+function tweakHexColor(hexColor, range){
+  var rgbArray = hexToRGB(hexColor);
+
+  var newRGBArray = [];
+
+  newRGBArray.push(Math.floor(rgbArray[0]+range*Math.random()-range/2));
+  newRGBArray.push(Math.floor(rgbArray[1]+range*Math.random()-range/2));
+  newRGBArray.push(Math.floor(rgbArray[2]+range*Math.random()-range/2));
+
+  var newHexColor = rgbToHex(newRGBArray[0],newRGBArray[1],newRGBArray[2]);
+  return newHexColor;
 }
 
