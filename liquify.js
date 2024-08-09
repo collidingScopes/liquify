@@ -18,6 +18,7 @@ Allow to set default angle of the perlin noise field (and direction of draw/incr
 Experiment with different parameters on the flow field that might look better
 Add toggle for generative movement option (random, flow field, circular swirls) -- allow the agent to choose randomly
 Add toggle for whether plotter draws a dot path // add GUI control for colour
+Add website about section / link div
 */
 
 var image,
@@ -74,11 +75,12 @@ function chooseBackground(){
   backgroundType = obj.StartingCanvas;
   console.log("background type: "+backgroundType);
 
+  canvasWidth = obj.canvasWidth;
+  canvasHeight = obj.canvasHeight;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+
   if(backgroundType == "ColorGrid"){
-    canvasWidth = window.innerWidth*0.95;
-    canvasHeight = window.innerHeight*0.95;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
 
     var rows = 8;
     var cols = 8;
@@ -100,10 +102,7 @@ function chooseBackground(){
     }
 
   } else if(backgroundType == "Mondrian"){
-    canvasWidth = window.innerWidth*0.95;
-    canvasHeight = window.innerHeight*0.95;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+
     generatePerlinData();
     drawMondrian();
 
@@ -180,6 +179,8 @@ var obj = {
   brushSize: Math.min(500, window.innerWidth*0.18),
   brushDensity: 5,
   opacity: 100,
+  canvasWidth: window.innerWidth*0.95,
+  canvasHeight: window.innerHeight*0.95,
 };
 var backgroundType = obj.StartingCanvas;
 
@@ -224,6 +225,8 @@ obj['Lock'] = function () {
 };
 gui.add(obj, 'Lock').name("Lock/Unlock Canvas (l)");
 
+gui.add(obj, "canvasWidth").name("Canvas Width").onChange(chooseBackground);
+gui.add(obj, "canvasHeight").name("Canvas Height").onChange(chooseBackground);
 
 customContainer = document.getElementById( 'gui' );
 customContainer.appendChild(gui.domElement);
@@ -419,8 +422,8 @@ function startGenerativeDraw(){
   var direction;
   var counter = 0;
   var angle = 0;
-  var maxRadius = canvasWidth * 0.35;
-  var minRadius = canvasWidth * 0.15;
+  var maxRadius = canvasWidth * 0.1;
+  var minRadius = canvasWidth * 0.2;
   var radiusRange = maxRadius - minRadius;
   var radius;
   var animationSpeed = 50; //larger value gives slower movement
@@ -431,6 +434,13 @@ function startGenerativeDraw(){
 
   var movementBoost = 3;
   var angleBias = Math.random()-0.5;
+
+  //create gradient
+  var gradient = ctx.createLinearGradient(0,0,canvasWidth,canvasHeight);
+
+  //add color stops
+  gradient.addColorStop(0,"red");
+  gradient.addColorStop(1,"blue");
 
   randomizeStartPoint();
 
@@ -514,11 +524,12 @@ function startGenerativeDraw(){
 
       //draw color where the plotter is
       ctx.beginPath();
-      ctx.fillStyle = "#d100ff";
+      ctx.fillStyle = gradient;
       //ctx.globalAlpha = 1;
-      ctx.arc(cx,cy,8,0,Math.PI*2);
+      ctx.arc(cx,cy,Math.ceil(canvasWidth*0.01),0,Math.PI*2);
       ctx.fill();
       //ctx.globalAlpha = 1;
+      ctx.closePath();
 
       animationRequest = requestAnimationFrame(loop);
       
