@@ -2,26 +2,22 @@
 To do list:
 dynamic cursor size based on brush size
 Can the brush also mix in other colors? i.e., a default color bias
-Show image size, current brush size, other key metrics
-Produce generative version which liquifies random parts of the canvas upon button click
-- Generative agent which move randomly and liquify as they move -- animated version
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
-On mobile, screen can become unscrollable (can't save or change options)
-On mobile, screen touch position can become unsynced from the canvas
 For generative background:
 Better color choices -- based on HSL scale instead? Start with palette then allow random
 Allow custom canvas size
 Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
 Allow user to adjust exponentially power (hard square vs. smooth circle)
 Hide "Select Image" button in the GUI when ColorGrid is chosen
-In GUI, add button to turn off the brush/mousedown effect, so that mobile users can scroll / resize
-Add button to start/stop the generative animation in the GUI
-Option to make generative agent move based on a flow field
+On mobile, screen can become unscrollable (can't save or change options)
+Test the lock canvas feature on mobile (can user scroll the page after?)
+On mobile, screen touch position can become unsynced from the canvas
 Allow color palettes for the Mondrian grid painting
 Allow to set default angle of the perlin noise field (and direction of draw/increment)
-Video export functionality (toggle on/off?)
 Experiment with different parameters on the flow field that might look better
+Add toggle for generative movement option (random, flow field, circular swirls) -- allow the agent to choose randomly
+Add toggle for whether plotter draws a dot path // add GUI control for colour
 */
 
 var image,
@@ -35,7 +31,9 @@ oldMouseX = 0,
 oldMouseY = 0;
 
 var canvas = document.getElementById("canvas");
-var ctx = canvas.getContext("2d");
+var ctx = canvas.getContext("2d", {
+  willReadFrequently: true,
+});
 var canvasWidth;
 var canvasHeight;
 
@@ -66,6 +64,13 @@ function getUserInputs(){
 }
 
 function chooseBackground(){
+
+  if(playAnimationToggle==true){
+    playAnimationToggle = false;
+    cancelAnimationFrame(animationRequest);
+    console.log("cancel animation");
+  }//cancel any existing animation loops 
+
   backgroundType = obj.StartingCanvas;
   console.log("background type: "+backgroundType);
 
@@ -107,29 +112,21 @@ function chooseBackground(){
     drawImageToCanvas();
   }
 
+  //update canvas size text box
+  var canvasSizeTextBox = document.getElementById("canvasSizeTextBox");
+  canvasSizeTextBox.innerHTML = Math.round(canvasWidth)+" x "+Math.round(canvasHeight);
+
   build();
 
 }
 
 //  configurator / setup
 function build() {
-  canvas = canvas || document.getElementById('canvas');
   
   if(backgroundType == "Image"){
     image = image || document.getElementById('originalImg');
     image.onload = resetCanvas;
   }
-
-  /*
-  Reset default brush settings
-  BRUSH_SIZE = Math.round(Math.min(canvasWidth,canvasHeight)*0.12);
-  obj.brushSize = BRUSH_SIZE;
-  obj.brushSize.min = Math.floor(Math.min(canvasWidth,canvasHeight)*0.02);
-  obj.brushSize.max = Math.ceil(Math.min(canvasWidth,canvasHeight)*0.4);
-
-  obj.brushDensity = 8;
-  SMUDGE_SIZE = Math.round(BRUSH_SIZE*0.08);
-  */
 
   getUserInputs();
 }
@@ -180,7 +177,7 @@ var videofps = 30;
 //add gui
 var obj = {
   StartingCanvas: 'Mondrian',
-  brushSize: Math.min(500, window.innerWidth*0.15),
+  brushSize: Math.min(500, window.innerWidth*0.18),
   brushDensity: 5,
   opacity: 100,
 };
@@ -200,7 +197,7 @@ gui.add(obj, 'SelectImage').name('Select Image');
 
 gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
 gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
-gui.add(obj, "opacity").min(5).max(100).step(1).name('Opacity').listen().onChange(getUserInputs);
+gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
 
 obj['RefreshCanvas'] = function () {
   resetCanvas();
@@ -210,18 +207,37 @@ gui.add(obj, 'RefreshCanvas').name("Refresh Canvas (r)");
 obj['SaveImage'] = function () {
 saveImage();
 };
-gui.add(obj, 'SaveImage').name("Save Image (i)");
+gui.add(obj, 'SaveImage').name("Image Export (i)");
 
 obj['SaveVideo'] = function () {
   chooseRecordingFunction();
 };
-gui.add(obj, 'SaveVideo').name("Save Video (v)");
+gui.add(obj, 'SaveVideo').name("Start/Stop Video Export (v)");
+
+obj['Animate'] = function () {
+  pausePlayAnimation();
+};
+gui.add(obj, 'Animate').name("Play Randomized Animation (p)");
+
+obj['Lock'] = function () {
+  lockUnlockCanvas();
+};
+gui.add(obj, 'Lock').name("Lock/Unlock Canvas (l)");
+
 
 customContainer = document.getElementById( 'gui' );
 customContainer.appendChild(gui.domElement);
 
+var canvasLockToggle = false;
+
 //  brush functions
 function updateCoords(e) {
+
+  //don't liquify if the canvas is locked
+  if(canvasLockToggle == true){
+    return;
+  }
+
   var coord_x,
       coord_y;
   if(e.touches && e.touches.length == 1){ // Only deal with one finger
@@ -396,21 +412,31 @@ function startGenerativeDraw(){
   }//cancel any existing animation loops 
   playAnimationToggle = true;
 
+  var cx;
+  var cy;
   var x;
   var y;
   var direction;
+  var counter = 0;
+  var angle = 0;
+  var maxRadius = canvasWidth * 0.35;
+  var minRadius = canvasWidth * 0.15;
+  var radiusRange = maxRadius - minRadius;
+  var radius;
+  var animationSpeed = 50; //larger value gives slower movement
 
-  var movementFactor = 0.02; //should make this user controlled
-  var maxXMovement = canvasWidth*movementFactor;
-  var maxYMovement = canvasHeight*movementFactor;
-  
+  var movementFactor; //should make this user controlled
+  var maxXMovement;
+  var maxYMovement;
+
+  var movementBoost = 3;
   var angleBias = Math.random()-0.5;
 
   randomizeStartPoint();
 
   function randomizeStartPoint(){
-    x = Math.floor(Math.random()*canvasWidth);
-    y = Math.floor(Math.random()*canvasHeight);
+    cx = Math.floor(Math.random()*canvasWidth);
+    cy = Math.floor(Math.random()*canvasHeight);
 
     if(Math.random()<0.5){
       direction = -1;
@@ -421,27 +447,33 @@ function startGenerativeDraw(){
 
   function loop(){
 
-    //Movement based on perlin noise
-    movementFactor = 0.08;
+    //Circular swirl movement, with center x/y based on perlin noise
+    movementFactor = 0.05/animationSpeed;
+    maxXMovement = canvasWidth*movementFactor;
+    angle = (angle + Math.PI/360) % (Math.PI*2);
+    radius = minRadius + radiusRange * (Math.sin(counter/animationSpeed)+1)/2;
 
-    var movementBoost = 2;
-    var perlinGridX = Math.floor((x/canvasWidth) * numPerlinCols);
-    var perlinGridY = Math.floor((y/canvasHeight) * numPerlinRows);
+    var perlinGridX = Math.floor((cx/canvasWidth) * numPerlinCols);
+    var perlinGridY = Math.floor((cy/canvasHeight) * numPerlinRows);
     var currentSlope = perlinDataArray[perlinGridY*numPerlinCols+perlinGridX] + angleBias;
 
     var xMovement = maxXMovement*direction;
     var yMovement = xMovement * currentSlope * movementBoost;
+    var randomYMovement = Math.sin(counter/animationSpeed) * 2;
 
-    x = x+xMovement;
-    y = y+yMovement;
+    cx = cx+xMovement;
+    cy = cy+yMovement + randomYMovement;
 
     //randomize X/Y values if they will go off canvas
-    if(x < 0 || x > canvasWidth){
+    if(cx < 0 || cx > canvasWidth){
       randomizeStartPoint();
     }
-    if(y < 0 || y > canvasHeight){
+    if(cy < 0 || cy > canvasHeight){
       randomizeStartPoint();
     }
+
+    x = cx + radius*Math.cos(angle);
+    y = cy + radius*Math.sin(angle);
 
     /*
     //RANDOM X and Y movement
@@ -476,8 +508,20 @@ function startGenerativeDraw(){
         animationRequest = requestAnimationFrame(loop);
       },MOUSE_UPDATE_DELAY);
       */
+      angle++;
+      counter++;
       liquify(x,y);
+
+      //draw color where the plotter is
+      ctx.beginPath();
+      ctx.fillStyle = "#d100ff";
+      //ctx.globalAlpha = 1;
+      ctx.arc(cx,cy,8,0,Math.PI*2);
+      ctx.fill();
+      //ctx.globalAlpha = 1;
+
       animationRequest = requestAnimationFrame(loop);
+      
 
     }
 
@@ -628,21 +672,27 @@ function toggleGUI(){
 
 //shortcut hotkey presses
 document.addEventListener('keydown', function(event) {
+  
   if (event.key === 'r') {
       resetCanvas();
   } else if (event.key === 'i') {
       saveImage();
   } else if (event.key === 'v') {
-      chooseRecordingFunction();
+      toggleVideoRecord();
   } else if (event.key === 'o') {
       toggleGUI();
   } else if(event.key === 'p'){
       pausePlayAnimation();
-  } else if(event.key === 'v'){
+  }
+  
+  /*
+  else if(event.key === 'v'){
       chooseRecordingFunction();
   } else if(event.key === 'b'){
       chooseEndRecordingFunction();
   }
+  */
+ 
 });
 
 // Mondrian object and functions
@@ -973,6 +1023,11 @@ function finalizeMobileVideo(e) {
 
   },500);
 
+}
+
+function lockUnlockCanvas(){
+  canvasLockToggle = !canvasLockToggle;
+  console.log("Canvas lock state: "+canvasLockToggle);
 }
 
 
