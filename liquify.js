@@ -5,8 +5,8 @@ Can the brush also mix in other colors? i.e., a default color bias
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
 For generative background:
+Add option for smooth perlin noise color gradient (instead of color grid)
 Better color choices -- based on HSL scale instead? Start with palette then allow random
-Allow custom canvas size
 Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
 Allow user to adjust exponentially power (hard square vs. smooth circle)
 Hide "Select Image" button in the GUI when ColorGrid is chosen
@@ -19,6 +19,10 @@ Experiment with different parameters on the flow field that might look better
 Add toggle for generative movement option (random, flow field, circular swirls) -- allow the agent to choose randomly
 Add toggle for whether plotter draws a dot path // add GUI control for colour
 Add website about section / link div
+Add user input for gradient color (base hue) and for marker color
+Mode where you can animate upon manual mouseclick (triggers animation draw with user input)
+- For example, can make it look like a car tyre is spinning
+Animation speed toggle (make the x movement and orbit speed slower)
 */
 
 var image,
@@ -30,6 +34,8 @@ timer,
 canUpdate = true,
 oldMouseX = 0,
 oldMouseY = 0;
+
+var markerToggle = true;
 
 var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d", {
@@ -72,7 +78,7 @@ function chooseBackground(){
     console.log("cancel animation");
   }//cancel any existing animation loops 
 
-  backgroundType = obj.StartingCanvas;
+  backgroundType = obj.startingCanvas;
   console.log("background type: "+backgroundType);
 
   canvasWidth = obj.canvasWidth;
@@ -105,6 +111,10 @@ function chooseBackground(){
 
     generatePerlinData();
     drawMondrian();
+
+  } else if(backgroundType == "Gradient"){
+    
+    generateGradientBackground();
 
   } else {
     userImage = document.getElementById("originalImg");
@@ -150,18 +160,6 @@ if(ua.includes("Android")){
 }
 console.log("isSafari: "+isSafari+", isFirefox: "+isFirefox+", isIOS: "+isIOS+", isAndroid: "+isAndroid);
 
-//save image button
-/*
-var saveImageButton = document.getElementById("saveImageButton");
-saveImageButton.addEventListener('click', saveImage);
-*/
-
-//video recording function
-/*
-var recordBtn = document.getElementById("recordVideoButton");
-recordBtn.addEventListener('click', chooseRecordingFunction);
-*/
-
 var mediaRecorder;
 var recordedChunks;
 var finishedBlob;
@@ -175,10 +173,11 @@ var videofps = 30;
 
 //add gui
 var obj = {
-  StartingCanvas: 'Mondrian',
-  brushSize: Math.min(500, window.innerWidth*0.18),
+  startingCanvas: 'Gradient',
+  brushSize: Math.min(150, window.innerWidth*0.18),
   brushDensity: 5,
   opacity: 100,
+  marker: true,
   canvasWidth: window.innerWidth*0.95,
   canvasHeight: window.innerHeight*0.95,
 };
@@ -189,41 +188,42 @@ gui.close();
 var guiOpenToggle = false;
 
 // Choose from accepted values
-gui.add(obj, 'StartingCanvas', [ 'Mondrian', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+gui.add(obj, 'startingCanvas', [ 'Mondrian', 'Gradient', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
 
-obj['SelectImage'] = function () {
+obj['selectImage'] = function () {
   imageInput.click();
 };
-gui.add(obj, 'SelectImage').name('Select Image');
+gui.add(obj, 'selectImage').name('Select Image');
 
 gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
 gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
 gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
+gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
 
-obj['RefreshCanvas'] = function () {
+obj['refreshCanvas'] = function () {
   resetCanvas();
 };
-gui.add(obj, 'RefreshCanvas').name("Refresh Canvas (r)");
+gui.add(obj, 'refreshCanvas').name("Refresh Canvas (r)");
 
-obj['SaveImage'] = function () {
+obj['saveImage'] = function () {
 saveImage();
 };
-gui.add(obj, 'SaveImage').name("Image Export (i)");
+gui.add(obj, 'saveImage').name("Image Export (i)");
 
-obj['SaveVideo'] = function () {
+obj['saveVideo'] = function () {
   chooseRecordingFunction();
 };
-gui.add(obj, 'SaveVideo').name("Start/Stop Video Export (v)");
+gui.add(obj, 'saveVideo').name("Start/Stop Video Export (v)");
 
-obj['Animate'] = function () {
+obj['animate'] = function () {
   pausePlayAnimation();
 };
-gui.add(obj, 'Animate').name("Play Randomized Animation (p)");
+gui.add(obj, 'animate').name("Play Randomized Animation (p)");
 
-obj['Lock'] = function () {
+obj['lock'] = function () {
   lockUnlockCanvas();
 };
-gui.add(obj, 'Lock').name("Lock/Unlock Canvas (l)");
+gui.add(obj, 'lock').name("Lock/Unlock Canvas (l)");
 
 gui.add(obj, "canvasWidth").name("Canvas Width").onChange(chooseBackground);
 gui.add(obj, "canvasHeight").name("Canvas Height").onChange(chooseBackground);
@@ -422,11 +422,11 @@ function startGenerativeDraw(){
   var direction;
   var counter = 0;
   var angle = 0;
-  var maxRadius = canvasWidth * 0.1;
-  var minRadius = canvasWidth * 0.2;
+  var maxRadius = Math.min(canvasWidth,canvasHeight) * 0.1;
+  var minRadius = Math.min(canvasWidth,canvasHeight) * 0.2;
   var radiusRange = maxRadius - minRadius;
   var radius;
-  var animationSpeed = 50; //larger value gives slower movement
+  var animationSpeed = 75; //larger value gives slower movement
 
   var movementFactor; //should make this user controlled
   var maxXMovement;
@@ -460,7 +460,7 @@ function startGenerativeDraw(){
     //Circular swirl movement, with center x/y based on perlin noise
     movementFactor = 0.05/animationSpeed;
     maxXMovement = canvasWidth*movementFactor;
-    angle = (angle + Math.PI/360) % (Math.PI*2);
+    angle = (angle + (Math.PI/360)/2000) % (Math.PI*2);
     radius = minRadius + radiusRange * (Math.sin(counter/animationSpeed)+1)/2;
 
     var perlinGridX = Math.floor((cx/canvasWidth) * numPerlinCols);
@@ -523,13 +523,15 @@ function startGenerativeDraw(){
       liquify(x,y);
 
       //draw color where the plotter is
-      ctx.beginPath();
-      ctx.fillStyle = gradient;
-      //ctx.globalAlpha = 1;
-      ctx.arc(cx,cy,Math.ceil(canvasWidth*0.01),0,Math.PI*2);
-      ctx.fill();
-      //ctx.globalAlpha = 1;
-      ctx.closePath();
+      if(markerToggle && Math.random() < 0.05){
+        ctx.beginPath();
+        ctx.fillStyle = gradient;
+        //ctx.globalAlpha = 1;
+        ctx.arc(cx,cy,Math.ceil(Math.min(canvasWidth,canvasHeight)*0.015),0,Math.PI*2);
+        ctx.fill();
+        //ctx.globalAlpha = 1;
+        ctx.closePath();
+      }
 
       animationRequest = requestAnimationFrame(loop);
       
@@ -627,14 +629,6 @@ function saveImage(){
   link.click();
 }
 
-function chooseRecordingFunction(){
-
-}
-
-function chooseEndRecordingFunction(){
-
-}
-
 function hexToRGB(hexColor){
   
   var rgbArray = []
@@ -694,6 +688,8 @@ document.addEventListener('keydown', function(event) {
       toggleGUI();
   } else if(event.key === 'p'){
       pausePlayAnimation();
+  } else if(event.key === 'm'){
+      toggleMarkerDraw();
   }
   
   /*
@@ -808,16 +804,22 @@ function pausePlayAnimation(){
 //SOURCE: https://github.com/joeiddon/perlin
 
 var perlinDataArray;
+
 const GRID_SIZE = 3;
 const RESOLUTION = 128;
-const COLOR_SCALE = 250;
 var numPerlinRows = GRID_SIZE*RESOLUTION;
 var numPerlinCols = GRID_SIZE*RESOLUTION;
 
 function generatePerlinData(){
-  
+
   perlin.seed(); //reset perlin data
   perlinDataArray = [];
+
+  var baseHue = 180 + Math.random()*180; //bound between 180-360 (exclude green/yellow)
+  var hueRange = 300;
+  var saturation = 0.6 + Math.random()*0.5;
+  var lightness = 0.4 + Math.random()*0.5;
+  console.log("base hue / saturation / lightness: "+baseHue+", "+saturation+", "+lightness);
 
   let pixel_size = canvasWidth / RESOLUTION;
   let num_pixels = GRID_SIZE / RESOLUTION;
@@ -827,22 +829,27 @@ function generatePerlinData(){
           let currentPerlinValue = perlin.get(x, y);
           perlinDataArray.push(currentPerlinValue);
 
-          /*
-          //draw heatmap onto the canvas using perlin data
-          let v = parseInt(currentPerlinValue * COLOR_SCALE);
-          ctx.fillStyle = 'hsl('+v+',50%,50%)';
-          ctx.fillRect(
-              x / GRID_SIZE * canvasWidth,
-              y / GRID_SIZE * canvasWidth,
-              pixel_size,
-              pixel_size
-          );
-          */
+          if(backgroundType == "Gradient"){
+            //draw heatmap onto the canvas using perlin data
+            var currentHue = parseInt(currentPerlinValue * hueRange/2 + baseHue);
+            ctx.fillStyle = 'hsl('+currentHue+','+saturation*100+'%'+','+lightness*100+'%)';
+            ctx.fillRect(
+                x / GRID_SIZE * canvasWidth,
+                y / GRID_SIZE * canvasHeight,
+                pixel_size,
+                pixel_size
+            );
+
+          }
       }
   }
 
 }
 
+function generateGradientBackground(){
+  generatePerlinData();
+               
+}
 
 function toggleVideoRecord(){
   if(recordVideoState == false){
@@ -1039,6 +1046,16 @@ function finalizeMobileVideo(e) {
 function lockUnlockCanvas(){
   canvasLockToggle = !canvasLockToggle;
   console.log("Canvas lock state: "+canvasLockToggle);
+}
+
+function toggleMarkerDraw(){
+  if(markerToggle){
+    markerToggle = false;
+    obj["marker"] = false;
+  } else {
+    markerToggle = true;
+    obj["marker"] = true;
+  }
 }
 
 
