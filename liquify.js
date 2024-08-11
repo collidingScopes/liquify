@@ -16,15 +16,16 @@ Add website about section / link div
 Mode where you can animate upon manual mouseclick (triggers animation draw with user input)
 - For example, can make it look like a car tyre is spinning
 Radius should scale based on brush size
-Try some videos played in reverse (reconstructing the original image)
-Mobile video export is broken
 Experiment with multiple marker agents at the same time (need to make each agent an object?)
+Try some videos played in reverse (reconstructing the original image)
+Mobile video export is broken (firefox working, mobile not?)
+Animation is very slow on Firefox
 */
 
 var image,
 MOUSE_UPDATE_DELAY = 30,
 BRUSH_SIZE,
-SMUDGE_SIZE, // SMUDGE_SIZE <= BRUSH_SIZE
+SMUDGE_SIZE,
 LIQUIFY_CONTRAST,
 timer,
 canUpdate = true,
@@ -164,9 +165,9 @@ function getUserInputs(){
   LIQUIFY_CONTRAST = obj.opacity/100;
   markerColor = obj.markerColor;
   animationSpeed = 500 / obj.animationSpeed;
-  console.log("Brush size: "+BRUSH_SIZE);
-  console.log("Smudge size: "+SMUDGE_SIZE);
-  console.log("Opacity: "+LIQUIFY_CONTRAST);
+  //console.log("Brush size: "+BRUSH_SIZE);
+  //console.log("Smudge size: "+SMUDGE_SIZE);
+  //console.log("Opacity: "+LIQUIFY_CONTRAST);
 }
 
 function chooseBackground(){
