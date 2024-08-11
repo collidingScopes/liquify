@@ -139,7 +139,7 @@ saveImage();
 gui.add(obj, 'saveImage').name("Image Export (i)");
 
 obj['saveVideo'] = function () {
-  chooseRecordingFunction();
+  toggleVideoRecord();
 };
 gui.add(obj, 'saveVideo').name("Start/Stop Video Export (v)");
 
