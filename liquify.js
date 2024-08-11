@@ -5,7 +5,6 @@ Can the brush also mix in other colors? i.e., a default color bias
 Add brush for restore, which draws the original picture on that spot
 Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
 For generative background:
-Add option for smooth perlin noise color gradient (instead of color grid)
 Better color choices -- based on HSL scale instead? Start with palette then allow random
 Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
 Allow user to adjust exponentially power (hard square vs. smooth circle)
@@ -17,12 +16,15 @@ Allow color palettes for the Mondrian grid painting
 Allow to set default angle of the perlin noise field (and direction of draw/increment)
 Experiment with different parameters on the flow field that might look better
 Add toggle for generative movement option (random, flow field, circular swirls) -- allow the agent to choose randomly
-Add toggle for whether plotter draws a dot path // add GUI control for colour
 Add website about section / link div
-Add user input for gradient color (base hue) and for marker color
 Mode where you can animate upon manual mouseclick (triggers animation draw with user input)
 - For example, can make it look like a car tyre is spinning
 Animation speed toggle (make the x movement and orbit speed slower)
+Radius should scale based on brush size
+Try some videos played in reverse (reconstructing the original image)
+Gradient background flow field needs to be separated from marker flow field (higher resolution)
+Image input function is broken (need to check, originalimg not updating correctly?)
+Mobile video export is broken
 */
 
 var image,
@@ -36,6 +38,7 @@ oldMouseX = 0,
 oldMouseY = 0;
 
 var markerToggle = true;
+var markerColor;
 
 var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d", {
@@ -43,6 +46,9 @@ var ctx = canvas.getContext("2d", {
 });
 var canvasWidth;
 var canvasHeight;
+
+var maxCanvasWidth = 2000;
+var maxCanvasHeight = 2000;
 
 var animationRequest;
 var playAnimationToggle = false;
@@ -59,12 +65,13 @@ var actualHeight = 1000;
 var scaledWidth = actualWidth;
 var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
-var maxImageWidth = 2000; //can be tweaked
+var maxImageWidth = 1080; //can be tweaked
 
 function getUserInputs(){
   BRUSH_SIZE = obj.brushSize;
   SMUDGE_SIZE = obj.brushDensity/100 * BRUSH_SIZE;
   LIQUIFY_CONTRAST = obj.opacity/100;
+  markerColor = obj.markerColor;
   console.log("Brush size: "+BRUSH_SIZE);
   console.log("Smudge size: "+SMUDGE_SIZE);
   console.log("Opacity: "+LIQUIFY_CONTRAST);
@@ -85,6 +92,8 @@ function chooseBackground(){
   canvasHeight = obj.canvasHeight;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
+
+  generatePerlinData();
 
   if(backgroundType == "ColorGrid"){
 
@@ -109,23 +118,22 @@ function chooseBackground(){
 
   } else if(backgroundType == "Mondrian"){
 
-    generatePerlinData();
     drawMondrian();
 
   } else if(backgroundType == "Gradient"){
-    
+
     generateGradientBackground();
 
-  } else {
-    userImage = document.getElementById("originalImg");
+  } else if(backgroundType == "Image"){
     drawImageToCanvas();
+    //userImage = document.getElementById("originalImg");
+    //image = image || document.getElementById('originalImg');
+    //userImage.onload = resetCanvas;
   }
 
   //update canvas size text box
   var canvasSizeTextBox = document.getElementById("canvasSizeTextBox");
   canvasSizeTextBox.innerHTML = Math.round(canvasWidth)+" x "+Math.round(canvasHeight);
-
-  build();
 
 }
 
@@ -133,8 +141,7 @@ function chooseBackground(){
 function build() {
   
   if(backgroundType == "Image"){
-    image = image || document.getElementById('originalImg');
-    image.onload = resetCanvas;
+
   }
 
   getUserInputs();
@@ -178,8 +185,9 @@ var obj = {
   brushDensity: 5,
   opacity: 100,
   marker: true,
-  canvasWidth: window.innerWidth*0.95,
-  canvasHeight: window.innerHeight*0.95,
+  markerColor: "#ffffff",
+  canvasWidth: Math.min(maxCanvasWidth, window.innerWidth*0.95),
+  canvasHeight: Math.min(maxCanvasHeight, window.innerHeight*0.95),
 };
 var backgroundType = obj.StartingCanvas;
 
@@ -199,6 +207,7 @@ gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().o
 gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
 gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
 gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
+gui.addColor(obj, "markerColor").name("Marker Color").onChange(getUserInputs);
 
 obj['refreshCanvas'] = function () {
   resetCanvas();
@@ -225,8 +234,8 @@ obj['lock'] = function () {
 };
 gui.add(obj, 'lock').name("Lock/Unlock Canvas (l)");
 
-gui.add(obj, "canvasWidth").name("Canvas Width").onChange(chooseBackground);
-gui.add(obj, "canvasHeight").name("Canvas Height").onChange(chooseBackground);
+gui.add(obj, "canvasWidth").max(maxCanvasWidth).name("Canvas Width").onChange(chooseBackground);
+gui.add(obj, "canvasHeight").max(maxCanvasHeight).name("Canvas Height").onChange(chooseBackground);
 
 customContainer = document.getElementById( 'gui' );
 customContainer.appendChild(gui.domElement);
@@ -435,13 +444,6 @@ function startGenerativeDraw(){
   var movementBoost = 3;
   var angleBias = Math.random()-0.5;
 
-  //create gradient
-  var gradient = ctx.createLinearGradient(0,0,canvasWidth,canvasHeight);
-
-  //add color stops
-  gradient.addColorStop(0,"red");
-  gradient.addColorStop(1,"blue");
-
   randomizeStartPoint();
 
   function randomizeStartPoint(){
@@ -522,15 +524,15 @@ function startGenerativeDraw(){
       counter++;
       liquify(x,y);
 
-      //draw color where the plotter is
-      if(markerToggle && Math.random() < 0.05){
+      //draw color where the marker is
+      if(markerToggle){
         ctx.beginPath();
-        ctx.fillStyle = gradient;
-        //ctx.globalAlpha = 1;
-        ctx.arc(cx,cy,Math.ceil(Math.min(canvasWidth,canvasHeight)*0.015),0,Math.PI*2);
+        ctx.fillStyle = markerColor;
+        ctx.globalAlpha = 0.5;
+        ctx.arc(cx,cy,Math.ceil(Math.min(canvasWidth,canvasHeight)*0.01),0,Math.random()*Math.PI*2);
         ctx.fill();
-        //ctx.globalAlpha = 1;
         ctx.closePath();
+        ctx.globalAlpha = 1;
       }
 
       animationRequest = requestAnimationFrame(loop);
@@ -588,8 +590,10 @@ function readSourceImage(){
 
           console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
 
-          build();
+          //build();
+          chooseBackground();
           canvas.scrollIntoView({behavior:"smooth"});
+          
           
       };
   };
@@ -605,6 +609,8 @@ function drawImageToCanvas(){
   canvasHeight = scaledHeight;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
+
+  userImage = document.getElementById("originalImg");
   
   //draw the resized image onto the page
   ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
@@ -815,12 +821,6 @@ function generatePerlinData(){
   perlin.seed(); //reset perlin data
   perlinDataArray = [];
 
-  var baseHue = 180 + Math.random()*180; //bound between 180-360 (exclude green/yellow)
-  var hueRange = 300;
-  var saturation = 0.6 + Math.random()*0.5;
-  var lightness = 0.4 + Math.random()*0.5;
-  console.log("base hue / saturation / lightness: "+baseHue+", "+saturation+", "+lightness);
-
   let pixel_size = canvasWidth / RESOLUTION;
   let num_pixels = GRID_SIZE / RESOLUTION;
   
@@ -829,25 +829,50 @@ function generatePerlinData(){
           let currentPerlinValue = perlin.get(x, y);
           perlinDataArray.push(currentPerlinValue);
 
-          if(backgroundType == "Gradient"){
-            //draw heatmap onto the canvas using perlin data
-            var currentHue = parseInt(currentPerlinValue * hueRange/2 + baseHue);
-            ctx.fillStyle = 'hsl('+currentHue+','+saturation*100+'%'+','+lightness*100+'%)';
-            ctx.fillRect(
-                x / GRID_SIZE * canvasWidth,
-                y / GRID_SIZE * canvasHeight,
-                pixel_size,
-                pixel_size
-            );
-
-          }
       }
   }
 
 }
 
+//use perlin noise to create a smooth gradient background
 function generateGradientBackground(){
-  generatePerlinData();
+
+  var gradientDataArray;
+  const GRID_SIZE = 1;
+  const RESOLUTION = 32;
+
+  perlin.seed(); //reset perlin data
+  gradientDataArray = [];
+
+  var baseHue = 180 + Math.random()*180; //bound between 180-360 (exclude green/yellow)
+  var hueRange = 300;
+  var saturation = 0.6 + Math.random()*0.4;
+  var lightness = 0.4 + Math.random()*0.35;
+  console.log("base hue / saturation / lightness: "+baseHue+", "+saturation+", "+lightness);
+
+  var pixelWidth = Math.ceil(canvasWidth / RESOLUTION);
+  var pixelHeight = Math.ceil(canvasHeight / RESOLUTION);
+  let num_pixels = GRID_SIZE / RESOLUTION;
+  
+  for (let y = 0; y < GRID_SIZE; y += num_pixels / GRID_SIZE){
+      for (let x = 0; x < GRID_SIZE; x += num_pixels / GRID_SIZE){
+          let currentPerlinValue = perlin.get(x, y);
+          gradientDataArray.push(currentPerlinValue);
+
+          if(backgroundType == "Gradient"){
+            //draw heatmap onto the canvas using perlin data
+            var currentHue = parseInt(currentPerlinValue * hueRange/2 + baseHue);
+            ctx.fillStyle = 'hsl('+currentHue+','+saturation*100+'%'+','+lightness*100+'%)';
+            ctx.fillRect(
+                Math.floor(x / GRID_SIZE * canvasWidth),
+                Math.floor(y / GRID_SIZE * canvasHeight),
+                pixelWidth,
+                pixelHeight,
+            );
+
+          }
+      }
+  }
                
 }
 
@@ -1060,5 +1085,6 @@ function toggleMarkerDraw(){
 
 
 //MAIN METHOD
+getUserInputs();
 chooseBackground();
 
