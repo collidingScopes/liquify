@@ -1,30 +1,24 @@
 /*
 To do list:
 dynamic cursor size based on brush size
-Can the brush also mix in other colors? i.e., a default color bias
 Add brush for restore, which draws the original picture on that spot
-Add brush for add color, which adds a blob of colour on that spot, which can then be smudged
 For generative background:
-Better color choices -- based on HSL scale instead? Start with palette then allow random
 Allow user to choose "null colour" which get dragged from outside the canvas edge. Right now it appears as transparent in the png
-Allow user to adjust exponentially power (hard square vs. smooth circle)
-Hide "Select Image" button in the GUI when ColorGrid is chosen
+Make the GUI dynamic (show/hide "Select Image" button in the GUI, etc.)
+Organize GUI into folders? (brush options, marker options, etc...)
 On mobile, screen can become unscrollable (can't save or change options)
 Test the lock canvas feature on mobile (can user scroll the page after?)
 On mobile, screen touch position can become unsynced from the canvas
 Allow color palettes for the Mondrian grid painting
 Allow to set default angle of the perlin noise field (and direction of draw/increment)
-Experiment with different parameters on the flow field that might look better
 Add toggle for generative movement option (random, flow field, circular swirls) -- allow the agent to choose randomly
 Add website about section / link div
 Mode where you can animate upon manual mouseclick (triggers animation draw with user input)
 - For example, can make it look like a car tyre is spinning
-Animation speed toggle (make the x movement and orbit speed slower)
 Radius should scale based on brush size
 Try some videos played in reverse (reconstructing the original image)
-Gradient background flow field needs to be separated from marker flow field (higher resolution)
-Image input function is broken (need to check, originalimg not updating correctly?)
 Mobile video export is broken
+Experiment with multiple marker agents at the same time (need to make each agent an object?)
 */
 
 var image,
@@ -40,6 +34,7 @@ oldMouseY = 0;
 var markerToggle = true;
 var markerColor;
 
+
 var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d", {
   willReadFrequently: true,
@@ -50,6 +45,7 @@ var canvasHeight;
 var maxCanvasWidth = 2000;
 var maxCanvasHeight = 2000;
 
+var animationSpeed;
 var animationRequest;
 var playAnimationToggle = false;
 
@@ -57,8 +53,7 @@ var playAnimationToggle = false;
 var imageInput = document.getElementById('imageInput');
 imageInput.addEventListener('change', readSourceImage);
 var isImageLoaded = false;
-var userImage;
-var originalImg = document.getElementById('originalImg');
+var userImage = document.getElementById('userImg');
 
 var actualWidth = 600; //size of default image
 var actualHeight = 1000;
@@ -66,12 +61,109 @@ var scaledWidth = actualWidth;
 var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 1080; //can be tweaked
+var canvasLockToggle = false;
+
+//detect user browser
+var ua = navigator.userAgent;
+var isSafari = false;
+var isFirefox = false;
+var isIOS = false;
+var isAndroid = false;
+if(ua.includes("Safari")){
+    isSafari = true;
+}
+if(ua.includes("Firefox")){
+    isFirefox = true;
+}
+if(ua.includes("iPhone") || ua.includes("iPad") || ua.includes("iPod")){
+    isIOS = true;
+}
+if(ua.includes("Android")){
+    isAndroid = true;
+}
+console.log("isSafari: "+isSafari+", isFirefox: "+isFirefox+", isIOS: "+isIOS+", isAndroid: "+isAndroid);
+
+var mediaRecorder;
+var recordedChunks;
+var finishedBlob;
+var recordingMessageDiv = document.getElementById("videoRecordingMessageDiv");
+var recordVideoState = false;
+var videoRecordInterval;
+var videoEncoder;
+var muxer;
+var mobileRecorder;
+var videofps = 30;
+
+//add gui
+var obj = {
+  startingCanvas: 'Gradient',
+  brushSize: Math.min(150, window.innerWidth*0.18),
+  brushDensity: 5,
+  opacity: 100,
+  animationSpeed: 10,
+  marker: true,
+  markerColor: "#ffffff",
+  canvasWidth: Math.min(maxCanvasWidth, window.innerWidth*0.95),
+  canvasHeight: Math.min(maxCanvasHeight, window.innerHeight*0.95),
+};
+var backgroundType = obj.StartingCanvas;
+
+var gui = new dat.gui.GUI( { autoPlace: false } );
+gui.close();
+var guiOpenToggle = false;
+
+// Choose from accepted values
+gui.add(obj, 'startingCanvas', [ 'Mondrian', 'Gradient', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+
+obj['selectImage'] = function () {
+  imageInput.click();
+};
+gui.add(obj, 'selectImage').name('Select Image');
+
+gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
+gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
+gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
+gui.add(obj, "animationSpeed").min(1).max(50).step(1).name('Animation Speed').onChange(getUserInputs);
+gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
+gui.addColor(obj, "markerColor").name("Marker Color").onChange(getUserInputs);
+
+obj['refreshCanvas'] = function () {
+  resetCanvas();
+};
+gui.add(obj, 'refreshCanvas').name("Refresh Canvas (r)");
+
+obj['saveImage'] = function () {
+saveImage();
+};
+gui.add(obj, 'saveImage').name("Image Export (i)");
+
+obj['saveVideo'] = function () {
+  chooseRecordingFunction();
+};
+gui.add(obj, 'saveVideo').name("Start/Stop Video Export (v)");
+
+obj['animate'] = function () {
+  pausePlayAnimation();
+};
+gui.add(obj, 'animate').name("Play Randomized Animation (p)");
+
+obj['lock'] = function () {
+  lockUnlockCanvas();
+};
+gui.add(obj, 'lock').name("Lock/Unlock Canvas (l)");
+
+gui.add(obj, "canvasWidth").max(maxCanvasWidth).name("Canvas Width").onChange(chooseBackground);
+gui.add(obj, "canvasHeight").max(maxCanvasHeight).name("Canvas Height").onChange(chooseBackground);
+
+customContainer = document.getElementById( 'gui' );
+customContainer.appendChild(gui.domElement);
 
 function getUserInputs(){
   BRUSH_SIZE = obj.brushSize;
   SMUDGE_SIZE = obj.brushDensity/100 * BRUSH_SIZE;
   LIQUIFY_CONTRAST = obj.opacity/100;
   markerColor = obj.markerColor;
+  animationSpeed = 500 / obj.animationSpeed;
   console.log("Brush size: "+BRUSH_SIZE);
   console.log("Smudge size: "+SMUDGE_SIZE);
   console.log("Opacity: "+LIQUIFY_CONTRAST);
@@ -136,111 +228,6 @@ function chooseBackground(){
   canvasSizeTextBox.innerHTML = Math.round(canvasWidth)+" x "+Math.round(canvasHeight);
 
 }
-
-//  configurator / setup
-function build() {
-  
-  if(backgroundType == "Image"){
-
-  }
-
-  getUserInputs();
-}
-
-//detect user browser
-var ua = navigator.userAgent;
-var isSafari = false;
-var isFirefox = false;
-var isIOS = false;
-var isAndroid = false;
-if(ua.includes("Safari")){
-    isSafari = true;
-}
-if(ua.includes("Firefox")){
-    isFirefox = true;
-}
-if(ua.includes("iPhone") || ua.includes("iPad") || ua.includes("iPod")){
-    isIOS = true;
-}
-if(ua.includes("Android")){
-    isAndroid = true;
-}
-console.log("isSafari: "+isSafari+", isFirefox: "+isFirefox+", isIOS: "+isIOS+", isAndroid: "+isAndroid);
-
-var mediaRecorder;
-var recordedChunks;
-var finishedBlob;
-var recordingMessageDiv = document.getElementById("videoRecordingMessageDiv");
-var recordVideoState = false;
-var videoRecordInterval;
-var videoEncoder;
-var muxer;
-var mobileRecorder;
-var videofps = 30;
-
-//add gui
-var obj = {
-  startingCanvas: 'Gradient',
-  brushSize: Math.min(150, window.innerWidth*0.18),
-  brushDensity: 5,
-  opacity: 100,
-  marker: true,
-  markerColor: "#ffffff",
-  canvasWidth: Math.min(maxCanvasWidth, window.innerWidth*0.95),
-  canvasHeight: Math.min(maxCanvasHeight, window.innerHeight*0.95),
-};
-var backgroundType = obj.StartingCanvas;
-
-var gui = new dat.gui.GUI( { autoPlace: false } );
-gui.close();
-var guiOpenToggle = false;
-
-// Choose from accepted values
-gui.add(obj, 'startingCanvas', [ 'Mondrian', 'Gradient', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
-
-obj['selectImage'] = function () {
-  imageInput.click();
-};
-gui.add(obj, 'selectImage').name('Select Image');
-
-gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
-gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
-gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
-gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
-gui.addColor(obj, "markerColor").name("Marker Color").onChange(getUserInputs);
-
-obj['refreshCanvas'] = function () {
-  resetCanvas();
-};
-gui.add(obj, 'refreshCanvas').name("Refresh Canvas (r)");
-
-obj['saveImage'] = function () {
-saveImage();
-};
-gui.add(obj, 'saveImage').name("Image Export (i)");
-
-obj['saveVideo'] = function () {
-  chooseRecordingFunction();
-};
-gui.add(obj, 'saveVideo').name("Start/Stop Video Export (v)");
-
-obj['animate'] = function () {
-  pausePlayAnimation();
-};
-gui.add(obj, 'animate').name("Play Randomized Animation (p)");
-
-obj['lock'] = function () {
-  lockUnlockCanvas();
-};
-gui.add(obj, 'lock').name("Lock/Unlock Canvas (l)");
-
-gui.add(obj, "canvasWidth").max(maxCanvasWidth).name("Canvas Width").onChange(chooseBackground);
-gui.add(obj, "canvasHeight").max(maxCanvasHeight).name("Canvas Height").onChange(chooseBackground);
-
-customContainer = document.getElementById( 'gui' );
-customContainer.appendChild(gui.domElement);
-
-var canvasLockToggle = false;
 
 //  brush functions
 function updateCoords(e) {
@@ -385,7 +372,6 @@ function liquify(x, y) {
 }
 
 // wire events...
-
 // canvas & mouse
 canvas.onmousedown = function(e) {
   canvas.onmousemove = updateCoords;
@@ -435,7 +421,6 @@ function startGenerativeDraw(){
   var minRadius = Math.min(canvasWidth,canvasHeight) * 0.2;
   var radiusRange = maxRadius - minRadius;
   var radius;
-  var animationSpeed = 75; //larger value gives slower movement
 
   var movementFactor; //should make this user controlled
   var maxXMovement;
@@ -580,20 +565,11 @@ function readSourceImage(){
 
           scaledWidth = Math.floor(scaledWidth/2)*2; //video encoder doesn't accept odd numbers
           scaledHeight = Math.floor(scaledHeight/8)*8; //video encoder wants a multiple of 8
-
-          drawImageToCanvas();
-
-          //show original image
-          originalImg.src = canvas.toDataURL();
-          originalImg.width = scaledWidth;
-          originalImg.height = scaledHeight;
-
           console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
 
-          //build();
+          drawImageToCanvas();
           chooseBackground();
           canvas.scrollIntoView({behavior:"smooth"});
-          
           
       };
   };
@@ -609,10 +585,8 @@ function drawImageToCanvas(){
   canvasHeight = scaledHeight;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-
-  userImage = document.getElementById("originalImg");
   
-  //draw the resized image onto the page
+  //draw the resized image onto the canvas
   ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
 }
 
@@ -697,14 +671,6 @@ document.addEventListener('keydown', function(event) {
   } else if(event.key === 'm'){
       toggleMarkerDraw();
   }
-  
-  /*
-  else if(event.key === 'v'){
-      chooseRecordingFunction();
-  } else if(event.key === 'b'){
-      chooseEndRecordingFunction();
-  }
-  */
  
 });
 
@@ -1041,7 +1007,6 @@ function startMobileRecording(){
   recordingMessageDiv.classList.remove("hidden");
   
   recordVideoState = true;
-
   mobileRecorder.start(); //start mobile video recording
 
   /*
