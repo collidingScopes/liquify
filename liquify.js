@@ -20,6 +20,8 @@ Experiment with multiple marker agents at the same time (need to make each agent
 Try some videos played in reverse (reconstructing the original image)
 Mobile video export is broken (firefox working, mobile not?)
 Animation is very slow on Firefox
+Try a smoke animation on a natural looking / nearly blank canvas -- focus on smoke swirls
+randomYMovement (sine booster) is too strong on mobile -- needs to be scaled based on w/h
 */
 
 var image,
@@ -63,6 +65,7 @@ var scaledHeight = actualHeight;
 var widthScalingRatio = 1;
 var maxImageWidth = 1080; //can be tweaked
 var canvasLockToggle = false;
+var backgroundColor;
 
 //detect user browser
 var ua = navigator.userAgent;
@@ -97,24 +100,26 @@ var videofps = 30;
 
 //add gui
 var obj = {
-  startingCanvas: 'Gradient',
+  startingCanvas: 'GradGrid',
   brushSize: Math.min(150, window.innerWidth*0.18),
   brushDensity: 5,
   opacity: 100,
   animationSpeed: 10,
   marker: true,
   markerColor: "#ffffff",
+  solidColor: "#000000",
   canvasWidth: Math.min(maxCanvasWidth, window.innerWidth*0.95),
   canvasHeight: Math.min(maxCanvasHeight, window.innerHeight*0.95),
 };
-var backgroundType = obj.StartingCanvas;
+var backgroundType = obj.startingCanvas;
 
 var gui = new dat.gui.GUI( { autoPlace: false } );
 gui.close();
 var guiOpenToggle = false;
 
 // Choose from accepted values
-gui.add(obj, 'startingCanvas', [ 'Mondrian', 'Gradient', 'ColorGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+gui.add(obj, 'startingCanvas', [ 'Mondrian', 'Gradient', 'ColorGrid', 'Solid Color', 'GradGrid', 'Image' ] ).name('Starting Canvas').listen().onChange(chooseBackground);
+gui.addColor(obj, "solidColor").name("Solid Color").onFinishChange(chooseBackground);
 
 obj['selectImage'] = function () {
   imageInput.click();
@@ -126,7 +131,7 @@ gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').liste
 gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
 gui.add(obj, "animationSpeed").min(1).max(50).step(1).name('Animation Speed').onChange(getUserInputs);
 gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
-gui.addColor(obj, "markerColor").name("Marker Color").onChange(getUserInputs);
+gui.addColor(obj, "markerColor").name("Marker Color").onFinishChange(getUserInputs);
 
 obj['refreshCanvas'] = function () {
   resetCanvas();
@@ -164,13 +169,17 @@ function getUserInputs(){
   SMUDGE_SIZE = obj.brushDensity/100 * BRUSH_SIZE;
   LIQUIFY_CONTRAST = obj.opacity/100;
   markerColor = obj.markerColor;
+  backgroundColor = obj.solidColor;
   animationSpeed = 500 / obj.animationSpeed;
   //console.log("Brush size: "+BRUSH_SIZE);
   //console.log("Smudge size: "+SMUDGE_SIZE);
   //console.log("Opacity: "+LIQUIFY_CONTRAST);
+  //console.log("background color: "+backgroundColor);
 }
 
 function chooseBackground(){
+
+  getUserInputs();
 
   if(playAnimationToggle==true){
     playAnimationToggle = false;
@@ -222,6 +231,118 @@ function chooseBackground(){
     //userImage = document.getElementById("originalImg");
     //image = image || document.getElementById('originalImg');
     //userImage.onload = resetCanvas;
+  } else if(backgroundType == "Solid Color"){
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0,0,canvasWidth,canvasHeight);
+
+  } else if(backgroundType == "GradGrid"){
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(0,0,canvasWidth,canvasHeight);
+
+    var numRows = Math.max(1,Math.ceil(Math.random()*10));
+    var cellHeight = Math.ceil(canvasHeight / numRows);
+
+    var saturation = randomWithinRange(0.5,0.3);
+    var lightness = randomWithinRange(0.55,0.2);
+    var saturationRange = 0.2;
+    var masterHue = Math.random()*360;
+    var masterColor = "hsl("+masterHue+","+saturation*100+"%,"+lightness*100+"%)";
+    var direction;
+
+    if(Math.random()<0.5){
+      direction = -1;
+    } else {
+      direction = 1;
+    }
+    var hueRange = Math.random()*15;
+    var hueStep = Math.random()*15;
+
+    var colorArray = [];
+    var hueArray = [];
+
+    for(var row=0; row<numRows; row++){
+
+      var numCols = Math.max(1,Math.ceil(Math.random()*10));
+      var cellWidth = Math.ceil(canvasWidth / numCols);
+      colorArray[row] = [];
+      hueArray[row] = [];
+
+      for(var col=0; col<numCols; col++){
+
+        var x0 = col*cellWidth;
+        var x1 = x0+cellWidth;
+        var y0 = row*cellHeight;
+        var y1 = y0;
+        var currentGradient = ctx.createLinearGradient(x0,y0,x1,y1);
+
+        var hue1;
+        var color1;
+        
+        var hue2;
+        var color2;
+
+        if(col==0){
+          //hue1 = masterHue + hueStep*row*direction;
+          hue1 = randomWithinRange(masterHue,hueStep);
+          color1 = "hsl("+hue1+","+(randomWithinRange(saturation,saturationRange))*100+"%,"+(randomWithinRange(lightness,saturationRange))*100+"%)";
+        } else {
+          hue1 = hueArray[row][col-1];
+          color1 = colorArray[row][col-1];
+        }
+        
+        if(Math.random()>0.05){
+          hue2 = randomWithinRange(hue1,hueRange);
+          color2 = "hsl("+hue2+","+(randomWithinRange(saturation,saturationRange))*100+"%,"+(randomWithinRange(lightness,saturationRange))*100+"%)";
+        } else {
+          if(Math.random()<0.5){
+            color2 = "#0f083e";
+            hue2 = getHueFromHex(color2);
+          }
+        }
+
+        hueArray[row].push(hue2);
+        colorArray[row].push(color2);
+
+        //add color stops
+        currentGradient.addColorStop(Math.random()*0.5,color1);
+        currentGradient.addColorStop(Math.random()*0.5+0.5,color2);
+        ctx.fillStyle = currentGradient;
+
+        if(Math.random()<0.0){
+          ctx.fillRect(cellWidth*col,cellHeight*row,cellWidth,cellHeight);
+        }
+
+        //draw random noise on the canvas after
+        var noiseLevel = cellWidth*cellHeight * 0.5;
+        var power = Math.max(5,Math.random()*100);
+
+        for(var i=0; i<noiseLevel; i++){
+          var x = cellWidth*col + Math.floor(Math.pow(Math.random(),power)*cellWidth);
+          var y = cellHeight*row + Math.floor(Math.pow(Math.random(),1)*cellHeight);
+
+          var rand = Math.random();
+          if(col==0){
+            ctx.fillStyle = color2;
+          } else {
+            ctx.fillStyle = colorArray[row][col-1];
+          }
+          /*
+          if(rand<0.45){
+            ctx.fillStyle = color1;
+          } else if(rand < 0.9) {
+            ctx.fillStyle = color2;
+          } else {
+            ctx.fillStyle = "white";
+          }
+          */
+          ctx.fillRect(x,y,1,1);
+        }
+        
+      }
+
+    }
+
   }
 
   //update canvas size text box
@@ -419,7 +540,7 @@ function startGenerativeDraw(){
   var counter = 0;
   var angle = 0;
   var maxRadius = Math.min(canvasWidth,canvasHeight) * 0.1;
-  var minRadius = Math.min(canvasWidth,canvasHeight) * 0.2;
+  var minRadius = (canvasWidth+canvasHeight)/2 * 0.6;
   var radiusRange = maxRadius - minRadius;
   var radius;
 
@@ -436,10 +557,10 @@ function startGenerativeDraw(){
     cx = Math.floor(Math.random()*canvasWidth);
     cy = Math.floor(Math.random()*canvasHeight);
 
-    if(Math.random()<0.5){
-      direction = -1;
-    } else {
+    if(cx < canvasWidth/2){
       direction = 1;
+    } else {
+      direction = -1;
     }
   }
 
@@ -457,7 +578,7 @@ function startGenerativeDraw(){
 
     var xMovement = maxXMovement*direction;
     var yMovement = xMovement * currentSlope * movementBoost;
-    var randomYMovement = Math.sin(counter/animationSpeed) * 2;
+    var randomYMovement = Math.sin(counter/animationSpeed) * 2 * Math.min(canvasWidth,canvasHeight)/1500;
 
     cx = cx+xMovement;
     cy = cy+yMovement + randomYMovement;
@@ -610,29 +731,6 @@ function saveImage(){
   link.click();
 }
 
-function hexToRGB(hexColor){
-  
-  var rgbArray = []
-
-  const r = parseInt(hexColor.substring(1, 3), 16);
-  const g = parseInt(hexColor.substring(3, 5), 16);
-  const b = parseInt(hexColor.substring(5, 7), 16);
-  
-  rgbArray.push(r);
-  rgbArray.push(g);
-  rgbArray.push(b);
-
-  return rgbArray;
-}
-
-function rgbToHex(r, g, b) {
-  return "#" + (
-    (r.toString(16).padStart(2, "0")) +
-    (g.toString(16).padStart(2, "0")) +
-    (b.toString(16).padStart(2, "0"))
-  );
-}
-
 function tweakHexColor(hexColor, range){
   var rgbArray = hexToRGB(hexColor);
 
@@ -644,6 +742,85 @@ function tweakHexColor(hexColor, range){
 
   var newHexColor = rgbToHex(newRGBArray[0],newRGBArray[1],newRGBArray[2]);
   return newHexColor;
+}
+
+function getHueFromHex(hex) {
+  const rgb = hexToRgb(hex);
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let hue = 0;
+
+  if (delta === 0) {
+    hue = 0;
+  } else if (max === r) {
+    hue = (g - b) / delta;
+  } else if (max === g) {
+    hue = 2 + (b - r) / delta;
+  } else {
+    hue = 4 + (r - g) / delta;
+  }
+
+  hue *= 60;
+  if (hue < 0) {
+    hue += 360;
+  }
+
+  return hue;
+}
+
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+  } : null;
+}
+
+function rgbToHue(r, g, b) {
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const hue = Math.atan2(Math.sqrt(3) * (gNorm - bNorm), 2 * rNorm - gNorm - bNorm);
+  return hue * 180 / Math.PI;
+}
+
+function rgbToSaturation(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return (max - min) / max;
+}
+
+function rgbToLightness(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return (max + min) / 2 / 255;
+}
+
+function interpolateHex(hex1,hex2,factor){
+  hex1RGB = hexToRgb(hex1);
+  hex2RGB = hexToRgb(hex2);
+
+  var newR = Math.round(hex1RGB.r + (hex2RGB.r - hex1RGB.r)*factor);
+  var newG = Math.round(hex1RGB.g + (hex2RGB.g - hex1RGB.g)*factor);
+  var newB = Math.round(hex1RGB.b + (hex2RGB.b - hex1RGB.b)*factor);
+
+  var rgbResult = "rgb("+newR+","+newG+","+newB+")";
+  return rgbResult;
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + (
+    (r.toString(16).padStart(2, "0")) +
+    (g.toString(16).padStart(2, "0")) +
+    (b.toString(16).padStart(2, "0"))
+  );
 }
 
 function toggleGUI(){
@@ -1047,6 +1224,10 @@ function toggleMarkerDraw(){
     markerToggle = true;
     obj["marker"] = true;
   }
+}
+
+function randomWithinRange(value,range){
+  return value-range+Math.random()*range*2;
 }
 
 

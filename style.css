@@ -18,6 +18,7 @@ html, body{
     min-width: 10vw;
 }
 
+
 #canvasSizeTextBox {
     left: 88vw;
     position: fixed;
@@ -122,7 +123,7 @@ h2 {
     margin: 0 auto;
     margin-top: 2.5vh;
     padding: 0;
-    border: 3px solid black;
+    border: 3px solid gray;
 
     /* note cursor is fixed 30px PNG - locked to BRUSH_SIZE of 30 */
     /* TODO: SVG cursor? */
